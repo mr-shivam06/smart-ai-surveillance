@@ -1,37 +1,46 @@
-# 🎯 AI-Based Multi-Camera Person & Object Tracking System
+# 🚀 AI-Based Multi-Camera Person & Object Tracking System
 
-A real-time intelligent surveillance system that detects, tracks, and identifies people across multiple camera feeds using AI.
+An intelligent real-time surveillance system that detects, tracks, and identifies individuals across multiple camera feeds using advanced computer vision and deep learning techniques.
 
 ---
 
-## 🚀 Features
+## 🎯 Key Highlights
 
-* 🎥 Multi-camera live stream processing
-* 🧠 Object detection using YOLOv8
-* 🧍 Person tracking using DeepSORT
-* 😀 Face recognition (known vs unknown)
-* 📊 Real-time FPS monitoring
-* 🔐 JWT-based authentication
-* 🌐 FastAPI backend + React frontend
+* 🔍 Real-time object detection using YOLOv8
+* 🧠 Robust tracking with DeepSORT (ID persistence)
+* 😀 Face recognition (Known vs Unknown classification)
+* 🎥 Multi-camera stream handling
+* ⚡ Optimized performance with FPS monitoring
+* 🔐 Secure authentication using JWT
+* 🌐 Full-stack system (FastAPI + React)
+
+---
+
+## 🧠 System Architecture
+
+Camera Feed → YOLOv8 Detection → DeepSORT Tracking → Face Recognition → API → Frontend Dashboard
 
 ---
 
 ## 🛠 Tech Stack
 
-* Backend: FastAPI
-* Frontend: React
-* AI Models: YOLOv8 + DeepSORT + FaceNet
-* Database: Local embeddings (face_db.pkl)
+| Layer     | Technology                     |
+| --------- | ------------------------------ |
+| Backend   | FastAPI                        |
+| Frontend  | React                          |
+| AI Models | YOLOv8, DeepSORT, FaceNet      |
+| Auth      | JWT                            |
+| Storage   | Local embeddings (face_db.pkl) |
 
 ---
 
-## ⚙️ Installation
+## ⚙️ Installation & Setup
 
 ```bash
-git clone https://github.com/mr-shivam06/smart-ai-surveillance.git
+git clone https://github.com/your-username/smart-ai-surveillance.git
 cd smart-ai-surveillance
 
-# Backend setup
+# Install dependencies
 pip install -r requirements.txt
 
 # Run backend
@@ -40,23 +49,45 @@ python backend/app/main.py
 
 ---
 
-## 📸 Demo
+## 📸 Features Demo
 
-* Real-time tracking with IDs
-* Known faces labeled with names
-* Unknown faces detected separately
-
----
-
-## 📌 Future Improvements
-
-* Cloud deployment
-* Database integration
-* Alert system
-* Mobile app integration
+* 🎯 Real-time tracking with unique IDs
+* 🧍 Person re-identification across frames
+* 😀 Known faces labeled with names
+* ❓ Unknown faces detected separately
 
 ---
 
-## 👨‍💻 Author
+## 📈 Performance
 
-Shivam and team 
+* Real-time processing (~XX FPS depending on hardware)
+* Lightweight and modular architecture
+
+---
+
+## 🚧 Future Enhancements
+
+* ☁️ Cloud deployment (AWS/GCP)
+* 🗄 Database integration
+* 🚨 Smart alert system (intrusion detection)
+* 📱 Mobile app integration
+
+---
+
+## 👨‍💻 Team
+
+This project was developed by:
+
+**Shivam and Team**
+
+---
+
+## 🤝 Contributions
+
+This was a collaborative effort involving system design, AI model integration, backend development, and frontend implementation.
+
+---
+
+## ⭐ Support
+
+If you found this project useful, consider giving it a ⭐ on GitHub!
