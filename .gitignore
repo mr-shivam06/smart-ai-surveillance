@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.pyc
+*.pkl
+*.pt
+*.onnx
+.env
+node_modules/
+dist/
+build/
