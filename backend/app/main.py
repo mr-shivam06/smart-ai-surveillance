@@ -32,7 +32,7 @@ from cross_camera_tracker import GLOBAL_TRACKER
 
 CAMERA_SOURCES = [
     {"id": 1, "source": 0,                                  "name": "Laptop Cam"},
-    {"id": 2, "source": "http://10.139.127.230:4747/video", "name": "Mobile Cam"},
+    {"id": 2, "source": "http://10.68.66.230:4747/video", "name": "Mobile Cam"},
 ]
 
 WINDOW_TITLE = "Smart AI Surveillance"
@@ -143,7 +143,7 @@ def draw_title_bar(grid, avg_fps, procs):
         rt = "Target: "+"  ".join(target_parts)
         rc = (80,80,255)
     else:
-        rt = "L:target  R:clear  T:trails  D:debug  S:snap  Q:quit"
+        rt = "L:target  R:clear  T:trails  D:debug  H:heat  Z:zones  S:snap  Q:quit"
         rc = (80,80,80)
     (rw,_),_ = cv2.getTextSize(rt,font,0.36,1)
     cv2.putText(grid,rt,(gw-rw-10,25),font,0.36,rc,1,cv2.LINE_AA)
@@ -156,7 +156,7 @@ def draw_title_bar(grid, avg_fps, procs):
 if __name__ == "__main__":
     print("\n========== SMART AI MULTI-CAMERA SURVEILLANCE ==========\n")
     print("[INFO] Green=local  Cyan=cross-camera  Orange=vehicle")
-    print("[INFO] L-click: target  R-click: clear  Q: quit\n")
+    print("[INFO] Keys: L=target  R=clear  T=trails  D=debug  H=heatmap  Z=zones  S=snap  Q=quit\n")
 
     for cfg in CAMERA_SOURCES:
         threading.Thread(target=camera_worker,args=(cfg,),daemon=True).start()
@@ -244,6 +244,18 @@ if __name__ == "__main__":
                 with lock: p=camera_procs.copy()
                 for proc in p.values(): proc.tracker.reset()
                 print("[INFO] All trackers reset.")
+
+            elif key == ord("h"):
+                with lock: p=camera_procs.copy()
+                for proc in p.values(): proc.show_heatmap = not proc.show_heatmap
+                state = "ON" if p and next(iter(p.values())).show_heatmap else "OFF"
+                print(f"[INFO] Heatmap {state}")
+
+            elif key == ord("z"):
+                with lock: p=camera_procs.copy()
+                for proc in p.values(): proc.show_zones = not proc.show_zones
+                state = "ON" if p and next(iter(p.values())).show_zones else "OFF"
+                print(f"[INFO] Zones {state}")
 
     except KeyboardInterrupt:
         print("\n[INFO] Stopped.")
