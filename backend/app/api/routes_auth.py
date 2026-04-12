@@ -43,26 +43,15 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
 # ---------------- LOGIN (UPDATED) ---------------- #
 @router.post("/login", response_model=TokenResponse)
 def login(
-    req: LoginRequest = None,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
     """
-    Supports BOTH:
-    - JSON login (your existing system)
-    - Swagger OAuth login (form-data)
+    ONLY form-data login (fixes 422 error)
     """
 
-    # 🔥 Decide input source
-    username = None
-    password = None
-
-    if req:
-        username = req.username
-        password = req.password
-    else:
-        username = form_data.username
-        password = form_data.password
+    username = form_data.username
+    password = form_data.password
 
     user = db.query(User).filter(User.username == username).first()
 
@@ -78,7 +67,6 @@ def login(
     token = create_access_token({"sub": user.username})
 
     return {"access_token": token, "token_type": "bearer"}
-
 
 # ---------------- PROFILE ---------------- #
 @router.get("/me", response_model=UserOut)
