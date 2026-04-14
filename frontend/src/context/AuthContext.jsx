@@ -11,43 +11,41 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const token = localStorage.getItem('token')
 
-    if (token) {
-      authAPI.me()
-        .then(res => {
-          setUser(res.data)
-        })
-        .catch(() => {
-          // token invalid → clear storage
-          localStorage.removeItem('token')
-          localStorage.removeItem('username')
-          setUser(null)
-        })
-        .finally(() => {
-          setLoading(false)
-        })
-    } else {
+    if (!token) {
       setLoading(false)
+      return
     }
+
+    authAPI.me()
+      .then(res => {
+        setUser(res.data)
+      })
+      .catch(() => {
+        // token invalid or expired
+        localStorage.removeItem('token')
+        localStorage.removeItem('username')
+        setUser(null)
+      })
+      .finally(() => {
+        setLoading(false)
+      })
   }, [])
 
   // ── Login ────────────────────────────────────────────
   const login = async (username, password) => {
     try {
-      // ✅ FIXED: pass username, password (not object)
       const res = await authAPI.login(username, password)
 
-      // store token
+      // save token
       localStorage.setItem('token', res.data.access_token)
 
-      // fetch user
+      // fetch user AFTER token is set
       const me = await authAPI.me()
       setUser(me.data)
 
-      // optional: store username
       localStorage.setItem('username', me.data.username)
 
       return me.data
-
     } catch (err) {
       console.error('Login error:', err)
       throw err
@@ -59,6 +57,9 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('token')
     localStorage.removeItem('username')
     setUser(null)
+
+    // ✅ redirect to login (important)
+    window.location.href = '/login'
   }
 
   return (

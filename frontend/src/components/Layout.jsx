@@ -16,9 +16,9 @@ const NAV = [
 ]
 
 export default function Layout() {
-  const { user, logout }        = useAuth()
-  const navigate                = useNavigate()
-  const [collapsed, setCollapsed] = useState(false)
+  const { user, logout }            = useAuth()
+  const navigate                    = useNavigate()
+  const [collapsed,   setCollapsed] = useState(false)
   const [alertCount, setAlertCount] = useState(0)
 
   useEffect(() => {
@@ -39,21 +39,13 @@ export default function Layout() {
         width: collapsed ? 60 : 220,
         background: 'var(--bg-800)',
         borderRight: '1px solid var(--border)',
-        display: 'flex',
-        flexDirection: 'column',
-        transition: 'width 0.2s',
-        flexShrink: 0,
-        overflow: 'hidden',
+        display: 'flex', flexDirection: 'column',
+        transition: 'width 0.2s', flexShrink: 0, overflow: 'hidden',
       }}>
-
         {/* Logo */}
         <div style={{
-          padding: '18px 16px',
-          borderBottom: '1px solid var(--border)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          minHeight: 60,
+          padding: '18px 16px', borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', gap: 10, minHeight: 60,
         }}>
           <Shield size={22} color="var(--teal)" style={{ flexShrink:0 }} />
           {!collapsed && (
@@ -63,7 +55,7 @@ export default function Layout() {
           )}
         </div>
 
-        {/* Nav links */}
+        {/* Nav */}
         <nav style={{ flex:1, padding:'12px 8px', display:'flex', flexDirection:'column', gap:2 }}>
           {NAV.map(({ to, icon: Icon, label }) => (
             <NavLink
@@ -71,33 +63,21 @@ export default function Layout() {
               to={to}
               end={to === '/'}
               style={({ isActive }) => ({
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '9px 10px',
-                borderRadius: 'var(--radius)',
+                display:'flex', alignItems:'center', gap:10,
+                padding:'9px 10px', borderRadius:'var(--radius)',
                 color: isActive ? 'var(--teal)' : 'var(--text-2)',
                 background: isActive ? 'rgba(13,217,197,0.08)' : 'transparent',
                 fontWeight: isActive ? 600 : 400,
-                fontSize: 13,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                transition: 'all 0.15s',
-                position: 'relative',
+                fontSize:13, whiteSpace:'nowrap', overflow:'hidden',
+                transition:'all 0.15s', position:'relative',
               })}
             >
               <Icon size={17} style={{ flexShrink:0 }} />
               {!collapsed && <span>{label}</span>}
-              {/* Alert badge on Alerts link */}
               {label === 'Alerts' && alertCount > 0 && (
                 <span style={{
-                  marginLeft:'auto',
-                  background:'var(--red)',
-                  color:'white',
-                  borderRadius:10,
-                  padding:'1px 6px',
-                  fontSize:10,
-                  fontWeight:700,
+                  marginLeft:'auto', background:'var(--red)', color:'white',
+                  borderRadius:10, padding:'1px 6px', fontSize:10, fontWeight:700,
                   display: collapsed ? 'none' : 'block',
                 }}>
                   {alertCount}
@@ -117,10 +97,7 @@ export default function Layout() {
         </button>
 
         {/* User + logout */}
-        <div style={{
-          padding:'12px 8px',
-          borderTop:'1px solid var(--border)',
-        }}>
+        <div style={{ padding:'12px 8px', borderTop:'1px solid var(--border)' }}>
           {!collapsed && (
             <div style={{ padding:'8px 10px', marginBottom:4 }}>
               <div style={{ fontSize:12, fontWeight:600, color:'var(--text-1)' }}>
@@ -142,12 +119,11 @@ export default function Layout() {
         </div>
       </aside>
 
-      {/* ── Main content ── */}
+      {/* ── Main ── */}
       <main style={{
-        flex: 1,
-        overflow: 'auto',
-        background: 'var(--bg-900)',
-        padding: '28px 32px',
+        flex:1, overflow:'auto',
+        background:'var(--bg-900)',
+        padding:'28px 32px',
       }}>
         <Outlet />
       </main>

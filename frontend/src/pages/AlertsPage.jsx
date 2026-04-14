@@ -21,19 +21,33 @@ export default function AlertsPage() {
   const [filter,   setFilter]   = useState({ type:'', camera_id:-1 })
   const [count,    setCount]    = useState(0)
 
-  const load = useCallback(() => {
+  // ✅ Stable load function
+  const load = useCallback(async () => {
     setLoading(true)
-    alertAPI.list({
-      limit: 100,
-      alert_type: filter.type || undefined,
-      camera_id: filter.camera_id >= 0 ? filter.camera_id : undefined,
-    })
-      .then(r => setAlerts(r.data))
-      .finally(() => setLoading(false))
-    alertAPI.count().then(r => setCount(r.data.unacknowledged)).catch(()=>{})
+    try {
+      const res = await alertAPI.list({
+        limit: 100,
+        alert_type: filter.type || undefined,
+        camera_id: filter.camera_id >= 0 ? filter.camera_id : undefined,
+      })
+      setAlerts(res.data)
+
+      const c = await alertAPI.count()
+      setCount(c.data.unacknowledged)
+
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
   }, [filter])
 
-  useEffect(() => { load() }, [load])
+  // ✅ RUN ONLY ON:
+  // - first load
+  // - filter change (intentional)
+  useEffect(() => {
+    load()
+  }, [filter])   // 🔥 NOT [load]
 
   const ack = async id => {
     await alertAPI.acknowledge(id)
@@ -127,17 +141,14 @@ export default function AlertsPage() {
                 opacity: a.acknowledged ? 0.55 : 1,
               }}
             >
-              {/* ID */}
               <span style={{ fontSize:11, color:'var(--text-3)', minWidth:36 }}>
                 #{a.alert_id}
               </span>
 
-              {/* Severity badge */}
               <span className={`badge ${SEV_COLOR[a.severity] || 'badge-teal'}`}>
                 {a.severity}
               </span>
 
-              {/* Type + message */}
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:600, fontSize:13, color:'var(--text-1)' }}>
                   {a.type.replace(/_/g,' ')}
@@ -147,7 +158,6 @@ export default function AlertsPage() {
                 </div>
               </div>
 
-              {/* Camera */}
               <span style={{
                 fontSize:12, color:'var(--text-3)',
                 background:'var(--bg-700)',
@@ -156,12 +166,10 @@ export default function AlertsPage() {
                 Cam {a.camera_id}
               </span>
 
-              {/* Time */}
               <span style={{ fontSize:11, color:'var(--text-3)', minWidth:70, textAlign:'right' }}>
                 {new Date(a.timestamp * 1000).toLocaleTimeString()}
               </span>
 
-              {/* Ack button */}
               {!a.acknowledged ? (
                 <button
                   className="btn btn-ghost"
