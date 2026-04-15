@@ -18,7 +18,7 @@ import sys, os, cv2, time, argparse
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from face_recognition_module import FaceRecognizer, FaceDatabase, IMAGES_DIR
+from app.face_recognition_module import FaceRecognizer, FaceDatabase, IMAGES_DIR
 
 
 def register_from_photos():

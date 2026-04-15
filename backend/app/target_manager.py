@@ -28,6 +28,7 @@ class TargetManager:
 
     def __init__(self, camera_id: int):
         self.camera_id    = camera_id
+        self.active_target: Optional[str]   = None
         self.target_id    : Optional[str]   = None
         self.target_bbox  : Optional[Tuple] = None
         self.target_class : Optional[str]   = None
@@ -145,6 +146,7 @@ class TargetManager:
             x1,y1,x2,y2 = obj["bbox"]
             if x1 <= cx <= x2 and y1 <= cy <= y2:
                 # Use global_id as target ID if available
+                self.active_target = obj.get("global_id") or obj["id"]
                 self.target_id    = obj.get("global_id") or obj["id"]
                 self.target_bbox  = obj["bbox"]
                 self.target_class = obj.get("class_name","object")
@@ -158,8 +160,12 @@ class TargetManager:
         self.clear_target()
 
     def clear_target(self):
+        self.active_target=None
         self.target_id=None; self.target_bbox=None
         self.target_class=None; self.target_conf=0.0; self.target_age=0
+
+    def select_target(self, track_id):
+        self.active_target = track_id
 
     @property
     def has_target(self): return self.target_id is not None

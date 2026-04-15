@@ -55,6 +55,7 @@ export const trackingAPI = {
   status:      () => api.get('/tracking/status'),
   crossCamera: () => api.get('/tracking/cross-camera'),
   reset:       () => api.post('/tracking/reset'),
+  select:      (data) => api.post('/tracking/track/select', data),
 }
 
 // ── Alerts ────────────────────────────────────────────────────

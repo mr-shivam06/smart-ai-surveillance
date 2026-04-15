@@ -30,13 +30,13 @@ import cv2, numpy as np, logging, time
 from collections import deque
 from typing import List, Tuple
 
-from detection import ObjectDetector, FrameResult, _get_color
-from tracking import PersonTracker, TrackResult
-from target_manager import TargetManager
-from cross_camera_tracker import GLOBAL_TRACKER
-from vehicle_analysis import VehicleAnalyzer, VEHICLE_CLASS_IDS
-from behavior_analysis import BehaviorAnalyzer
-from alert_system import ALERT_SYSTEM
+from app.detection import ObjectDetector, FrameResult, _get_color
+from app.tracking import PersonTracker, TrackResult
+from app.target_manager import TargetManager
+from app.cross_camera_tracker import GLOBAL_TRACKER
+from app.vehicle_analysis import VehicleAnalyzer, VEHICLE_CLASS_IDS
+from app.behavior_analysis import BehaviorAnalyzer
+from app.alert_system import ALERT_SYSTEM
 
 logging.basicConfig(level=logging.INFO)
 
@@ -66,8 +66,9 @@ class CameraProcessor:
         self.is_ip = isinstance(source, str) and source.startswith("http")
 
         self.cap = cv2.VideoCapture(source)
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        if not self.cap.isOpened():
+        if self.cap is not None:
+            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        if self.cap is None or not self.cap.isOpened():
             self.logger.warning(f"Camera {camera_id} — no signal.")
 
         self.detector = ObjectDetector(
@@ -82,12 +83,13 @@ class CameraProcessor:
         self.vehicle_analyzer = VehicleAnalyzer(camera_id)
         self.behavior         = BehaviorAnalyzer(camera_id, self.tracker)
 
-        from face_recognition_module import FaceRecognizer
+        from app.face_recognition_module import FaceRecognizer
         self.face_recognizer = FaceRecognizer(camera_id)
         self.face_recognizer.process_every = 6
 
         # Display toggles
         self._trails: dict        = {}
+        self.last_seen: dict      = {}
         self.show_trails: bool    = True
         self.show_debug_id: bool  = False
         self.show_heatmap: bool   = False
@@ -102,7 +104,7 @@ class CameraProcessor:
     # ── Public ────────────────────────────────────────────────
 
     def get_frame(self) -> np.ndarray:
-        if not self.cap.isOpened():
+        if self.cap is None or not self.cap.isOpened():
             return self._no_signal()
 
         if self.is_ip:
@@ -110,6 +112,13 @@ class CameraProcessor:
 
         ret, frame = self.cap.read()
         if not ret:
+            self.logger.warning("Camera lost. Reconnecting...")
+            if self.cap is not None:
+                self.cap.release()
+            time.sleep(1)
+            self.cap = cv2.VideoCapture(self.source)
+            if self.cap is not None:
+                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             return self._no_signal()
 
         frame = cv2.resize(frame, (self.frame_width, self.frame_height))
@@ -128,12 +137,26 @@ class CameraProcessor:
             result.to_deepsort_format(), frame
         )
 
+        face_res = self.face_recognizer.recognize_in_frame(
+            frame, result.persons()
+        )
+        self._attach_face_ids(face_res, tracked)
+
         # 3 — Global IDs (must be before all analysis)
         GLOBAL_TRACKER.assign_global_ids(
             camera_id=self.camera_id,
             tracked_objects=tracked,
             frame=frame,
         )
+        if not hasattr(self, "last_seen"):
+            self.last_seen = {}
+        seen_now = time.time()
+        for track in tracked:
+            if track.global_id:
+                self.last_seen[track.global_id] = seen_now
+        for gid, last_seen in list(self.last_seen.items()):
+            if seen_now - last_seen >= 2:
+                del self.last_seen[gid]
 
         # 4 — Vehicle analysis
         self.vehicle_analyzer.update(tracked, frame, self.camera_id)
@@ -162,15 +185,12 @@ class CameraProcessor:
         out = self._draw_hud(out, tracked)
         out = self.target_manager.draw(out)
 
-        face_res = self.face_recognizer.recognize_in_frame(
-            frame, result.persons()
-        )
         out = self.face_recognizer.annotate(out, face_res)
 
         return out
 
     def release(self):
-        if self.cap.isOpened(): self.cap.release()
+        if self.cap is not None and self.cap.isOpened(): self.cap.release()
 
     # ── Draw ──────────────────────────────────────────────────
 
@@ -197,13 +217,19 @@ class CameraProcessor:
             else:
                 box_col, badge_col = (0,210,0),   (0,130,0)
 
-            cv2.rectangle(frame,(x1,y1),(x2,y2),box_col,2)
+            thickness = 2
+            if str(display_id) == str(self.target_manager.active_target) or \
+               str(t.id) == str(self.target_manager.active_target):
+                box_col = (0,0,255)
+                thickness = 4
+
+            cv2.rectangle(frame,(x1,y1),(x2,y2),box_col,thickness)
 
             # Dwell time annotation
             dwell = self.behavior.dwell.get_dwell(display_id)
             dwell_tag = f" {int(dwell)}s" if dwell >= 10 else ""
 
-            label = f"{t.class_name}  {display_id}{dwell_tag}"
+            label = f"{t.class_name}  {t.global_id}{dwell_tag}" if t.global_id else f"{t.class_name}  {display_id}{dwell_tag}"
             (tw,th),_ = cv2.getTextSize(label,font,fs,1)
             by1=max(y1-th-8,0); by2=by1+th+6
             cv2.rectangle(frame,(x1,by1),(x1+tw+8,by2),badge_col,-1)
@@ -330,7 +356,8 @@ class CameraProcessor:
             active.add(did)
             if did not in self._trails: self._trails[did]=deque(maxlen=20)
             self._trails[did].append(t.centroid)
-        for tid in set(self._trails)-active: del self._trails[tid]
+        for tid in set(self._trails)-active:
+            if tid not in self.last_seen: del self._trails[tid]
 
     def _attach_track_ids(self, result, tracked):
         for track in tracked:
@@ -343,6 +370,18 @@ class CameraProcessor:
             if best_det and best_d<60:
                 try: best_det.track_id=int(track.id.split("ID")[-1])
                 except: best_det.track_id=None
+
+    def _attach_face_ids(self, face_res, tracked):
+        for face in face_res.known_faces:
+            best_track=None; best_iou=0.0
+            for track in tracked:
+                score = _iou(face.box_cv2, track.bbox)
+                if score > best_iou:
+                    best_iou=score; best_track=track
+            if best_track and best_iou > 0.2:
+                best_track.face_id = face.name
+                best_track.global_id = face.name
+                face.track_id = best_track.id
 
     def _no_signal(self):
         frame=np.zeros((self.frame_height,self.frame_width,3),dtype=np.uint8)

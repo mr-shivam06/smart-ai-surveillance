@@ -1,6 +1,6 @@
-# 🚀 AI-Based Multi-Camera Person & Object Tracking System
+# 🚀 AI-Based Multi-Camera Surveillance & Tracking System
 
-An advanced real-time surveillance system designed to detect, track, and identify individuals across multiple camera feeds using cutting-edge computer vision and deep learning techniques.
+An advanced real-time surveillance system designed to detect, track, and identify individuals and vehicles across multiple camera feeds using cutting-edge computer vision and deep learning techniques.
 
 ---
 
@@ -8,9 +8,10 @@ An advanced real-time surveillance system designed to detect, track, and identif
 
 This project simulates an intelligent surveillance solution capable of:
 
-* Detecting objects in real time
-* Tracking individuals with persistent IDs
+* Detecting objects (persons, vehicles, etc.) in real time
+* Tracking individuals with persistent global IDs
 * Recognizing known faces and flagging unknown ones
+* Monitoring and tracking vehicle movement
 * Managing multiple camera streams efficiently
 
 It demonstrates practical implementation of AI in security, monitoring, and smart city applications.
@@ -20,33 +21,34 @@ It demonstrates practical implementation of AI in security, monitoring, and smar
 ## 🎯 Key Features
 
 * 🔍 **Object Detection** — Powered by YOLOv8 for high-speed and accurate detection
-* 🧠 **Multi-Object Tracking** — DeepSORT ensures consistent tracking IDs
-* 😀 **Face Recognition** — Distinguishes between known and unknown individuals
+* 🧠 **Multi-Object Tracking** — DeepSORT ensures consistent tracking IDs across frames
+* 😀 **Face Recognition** — Distinguishes between known and unknown individuals using embeddings
+* 🚗 **Vehicle Tracking** — Tracks and processes vehicle movement and data
 * 🎥 **Multi-Camera Support** — Handles multiple video streams simultaneously
 * ⚡ **Real-Time Performance** — Optimized pipeline with FPS monitoring
 * 🔐 **Authentication System** — Secure endpoints using JWT
-* 🌐 **Full-Stack Architecture** — FastAPI backend + React frontend
+* 🌐 **Full-Stack Architecture** — FastAPI backend + React frontend dashboard
 
 ---
 
 ## 🧠 System Architecture
 
 ```text
-Camera Feed → YOLOv8 → DeepSORT → Face Recognition → FastAPI → React Dashboard
+Camera Feed → YOLOv8 → DeepSORT → Face Recognition → Vehicle Module → FastAPI → React Dashboard
 ```
 
 ---
 
 ## 🛠 Tech Stack
 
-| Category       | Technology Used                |
-| -------------- | ------------------------------ |
-| Backend        | FastAPI                        |
-| Frontend       | React                          |
-| AI/ML Models   | YOLOv8, DeepSORT, FaceNet      |
-| Authentication | JWT                            |
-| Language       | Python, JavaScript             |
-| Storage        | Local embeddings (face_db.pkl) |
+| Category       | Technology Used                  |
+| -------------- | -------------------------------- |
+| Backend        | FastAPI                          |
+| Frontend       | React (Vite)                     |
+| AI/ML Models   | YOLOv8, DeepSORT, FaceNet        |
+| Authentication | JWT                              |
+| Language       | Python, JavaScript               |
+| Storage        | Local embeddings & tracking data |
 
 ---
 
@@ -62,8 +64,13 @@ cd smart-ai-surveillance
 # Install backend dependencies
 pip install -r requirements.txt
 
-# Run the backend server
-python backend/app/main.py
+# Run backend
+python backend/app/api_main.py
+
+# Run frontend
+cd frontend
+npm install
+npm run dev
 ```
 
 ---
@@ -74,14 +81,17 @@ python backend/app/main.py
 * 🧍 Person re-identification across frames
 * 😀 Known faces labeled with names
 * ❓ Unknown individuals flagged separately
+* 🚗 Vehicle detection and tracking
+* 📊 Live dashboard with tracking insights
 
 ---
 
 ## 📊 Performance Insights
 
 * ⚡ Real-time processing (~XX FPS depending on hardware)
-* 🧩 Modular and scalable architecture
 * 🧠 Efficient tracking and recognition pipeline
+* 📉 Reduced latency with optimized frame handling
+* 🧩 Modular and scalable architecture
 
 ---
 
@@ -92,6 +102,7 @@ python backend/app/main.py
 * 🚨 Smart alert system (intrusion detection, notifications)
 * 📱 Mobile app interface
 * 📡 Edge device optimization
+* 🧠 Advanced analytics (heatmaps, behavior tracking)
 
 ---
 
@@ -111,6 +122,7 @@ This was a collaborative effort involving:
 * AI model integration
 * Backend API development
 * Frontend interface design
+* Tracking and performance optimization
 
 ---
 

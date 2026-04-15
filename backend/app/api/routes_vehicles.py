@@ -19,6 +19,17 @@ from app.schemas.schemas import VehicleOut
 router = APIRouter()
 
 
+def _vehicle_out(v):
+    data = v.to_dict() if hasattr(v, "to_dict") else dict(v)
+    cams = data.get("cameras", [])
+    if isinstance(cams, str):
+        cams = [int(c) for c in cams.split(",") if c]
+    elif isinstance(cams, int):
+        cams = [cams]
+    data["cameras"] = cams
+    return data
+
+
 @router.get("", response_model=List[VehicleOut])
 def list_vehicles(
     limit        : int  = Query(100, ge=1, le=500),
@@ -28,7 +39,7 @@ def list_vehicles(
     from app.vehicle_analysis import VehicleAnalyzer
     registry = VehicleAnalyzer.get_registry()
     results  = registry.search()[:limit]
-    return results
+    return [_vehicle_out(v) for v in results]
 
 
 @router.get("/search", response_model=List[VehicleOut])
@@ -46,10 +57,10 @@ def search_vehicles(
       GET /vehicles/search?color=white&shape_type=van/truck
     """
     from app.vehicle_analysis import VehicleAnalyzer
-    return VehicleAnalyzer.search(
+    return [_vehicle_out(v) for v in VehicleAnalyzer.search(
         color      = color      or "",
         shape_type = shape_type or "",
-    )
+    )]
 
 
 @router.get("/{global_id}")
@@ -63,4 +74,4 @@ def get_vehicle(
     if not info:
         from fastapi import HTTPException
         raise HTTPException(404, f"Vehicle {global_id} not found")
-    return info.to_dict()
+    return _vehicle_out(info)

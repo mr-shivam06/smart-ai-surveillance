@@ -14,6 +14,22 @@ from app.schemas.schemas import TrackingStatus, GlobalIDInfo
 router = APIRouter()
 
 
+@router.post("/track/select")
+def select_target(data: dict):
+    camera_id = data.get("camera_id")
+    track_id = data.get("track_id")
+
+    from app.camera_registry import CAMERA_PROCESSORS
+
+    if camera_id not in CAMERA_PROCESSORS:
+        return {"error": "Camera not found"}
+
+    processor = CAMERA_PROCESSORS[camera_id]
+    processor.target_manager.select_target(track_id)
+
+    return {"status": "ok", "track_id": track_id}
+
+
 # ── Tracking Status ────────────────────────────────────────
 @router.get("/status", response_model=TrackingStatus)
 def tracking_status(current_user: dict = Depends(get_current_user)):

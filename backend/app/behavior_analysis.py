@@ -31,8 +31,8 @@ import numpy as np
 from collections import deque, defaultdict
 from typing import Dict, List, Optional, Tuple
 
-from alert_system import ALERT_SYSTEM
-from vehicle_analysis import VEHICLE_CLASS_IDS
+from app.alert_system import ALERT_SYSTEM
+from app.vehicle_analysis import VEHICLE_CLASS_IDS
 
 logger = logging.getLogger("BehaviorAnalysis")
 

@@ -153,6 +153,7 @@ class FaceDatabase:
         self.known_names      : List[str]        = []
         self.known_embeddings : List[np.ndarray] = []
         os.makedirs(IMAGES_DIR,   exist_ok=True)
+        os.makedirs("face_db/images", exist_ok=True)
         os.makedirs(FACE_DB_DIR,  exist_ok=True)
 
     def load(self) -> int:
@@ -165,6 +166,10 @@ class FaceDatabase:
         else:
             logger.info("[FaceDB] Loading from cache...")
             self._load_embeddings()
+            if not self.known_embeddings:
+                logger.info("[FaceDB] Cache empty — loading fallback images...")
+                self._build_from_images()
+                self._save_embeddings()
         logger.info(
             f"[FaceDB] Ready — {len(self.known_names)} person(s): "
             f"{self.known_names}"
@@ -175,33 +180,42 @@ class FaceDatabase:
         if not os.path.exists(EMBEDDINGS_PATH):
             return True
         pkl_mtime = os.path.getmtime(EMBEDDINGS_PATH)
-        for fname in os.listdir(IMAGES_DIR):
-            if fname.lower().endswith((".jpg", ".jpeg", ".png")):
-                if os.path.getmtime(
-                    os.path.join(IMAGES_DIR, fname)
-                ) > pkl_mtime:
-                    return True
+        for img_dir in self._image_dirs():
+            for fname in os.listdir(img_dir):
+                if fname.lower().endswith((".jpg", ".jpeg", ".png")):
+                    if os.path.getmtime(
+                        os.path.join(img_dir, fname)
+                    ) > pkl_mtime:
+                        return True
         return False
 
     def _build_from_images(self):
         self.known_names      = []
         self.known_embeddings = []
-        for fname in sorted(os.listdir(IMAGES_DIR)):
-            if not fname.lower().endswith((".jpg", ".jpeg", ".png")):
-                continue
-            name     = os.path.splitext(fname)[0].replace("_", " ").title()
-            img_path = os.path.join(IMAGES_DIR, fname)
-            try:
-                img        = fr.load_image_file(img_path)
-                embeddings = fr.face_encodings(img)
-                if not embeddings:
-                    logger.warning(f"[FaceDB] No face in '{fname}' — skip.")
+        for img_dir in self._image_dirs():
+            for fname in sorted(os.listdir(img_dir)):
+                if not fname.lower().endswith((".jpg", ".jpeg", ".png")):
                     continue
-                self.known_names.append(name)
-                self.known_embeddings.append(embeddings[0])
-                logger.info(f"[FaceDB] Loaded: {name}")
-            except Exception as e:
-                logger.error(f"[FaceDB] Error '{fname}': {e}")
+                name     = os.path.splitext(fname)[0].replace("_", " ").title()
+                img_path = os.path.join(img_dir, fname)
+                try:
+                    img        = fr.load_image_file(img_path)
+                    embeddings = fr.face_encodings(img)
+                    if not embeddings:
+                        logger.warning(f"[FaceDB] No face in '{fname}' — skip.")
+                        continue
+                    self.known_names.append(name)
+                    self.known_embeddings.append(embeddings[0])
+                    logger.info(f"[FaceDB] Loaded: {name}")
+                except Exception as e:
+                    logger.error(f"[FaceDB] Error '{fname}': {e}")
+
+    def _image_dirs(self):
+        dirs = []
+        for path in (IMAGES_DIR, "face_db/images"):
+            if os.path.isdir(path) and path not in dirs:
+                dirs.append(path)
+        return dirs
 
     def _save_embeddings(self):
         with open(EMBEDDINGS_PATH, "wb") as f:

@@ -15,6 +15,10 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+      '/camera': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
       '/tracking': {
         target: 'http://localhost:8000',
         changeOrigin: true,

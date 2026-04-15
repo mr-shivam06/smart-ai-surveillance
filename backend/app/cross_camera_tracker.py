@@ -34,7 +34,7 @@ GALLERY_TTL      = 60.0   # seconds to keep lost identity
 MIN_CROP_PX      = 900    # min crop area to attempt embedding
 CLEANUP_INTERVAL = 10.0
 
-_THRESH_OSNET = 0.72
+_THRESH_OSNET = 0.45
 _THRESH_HIST  = 0.55
 
 # Class families for matching guard
@@ -203,6 +203,11 @@ class CrossCameraTracker:
         """
         h, w = frame.shape[:2]
         for track in tracked_objects:
+            face_id = getattr(track, "face_id", None)
+            if face_id:
+                track.global_id = face_id
+                continue
+
             x1,y1,x2,y2 = track.bbox
             x1c,y1c = max(0,x1),max(0,y1)
             x2c,y2c = min(w,x2),min(h,y2)
@@ -291,6 +296,8 @@ class CrossCameraTracker:
             if e.is_active and e.camera_id == camera_id: continue
             if e.embedding is None: continue
             sim = _cosine(emb, e.embedding)
+            if _USE_OSNET and (1.0 - sim) > MATCH_THRESHOLD:
+                continue
             if sim > best_sim:
                 best_sim = sim; best_gid = gid
 

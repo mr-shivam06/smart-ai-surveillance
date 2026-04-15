@@ -174,6 +174,7 @@ class VehicleInfo:
 class VehicleRegistry:
     def __init__(self):
         self._records: Dict[str, VehicleInfo] = {}
+        self.vehicles = []
         self._lock = threading.Lock()
         os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
         self._db = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -189,6 +190,11 @@ class VehicleRegistry:
     def upsert(self, info: VehicleInfo):
         with self._lock:
             self._records[info.global_id] = info
+            self.vehicles.append({
+                "camera_id": info.cameras[-1] if info.cameras else None,
+                "type": info.class_name,
+                "timestamp": time.time()
+            })
             cams = ",".join(str(c) for c in info.cameras)
             self._db.execute("""
                 INSERT INTO vehicles VALUES (?,?,?,?,?,?,?,?)
@@ -238,6 +244,8 @@ class VehicleAnalyzer:
 
     def __init__(self, camera_id: int):
         self.camera_id = camera_id
+        if not hasattr(self, "vehicles"):
+            self.vehicles = _registry.vehicles
         logger.info(f"[Camera-{camera_id}] VehicleAnalyzer ready (no OCR)")
 
     def update(self, tracked: list, frame: np.ndarray, camera_id: int):
@@ -271,6 +279,8 @@ class VehicleAnalyzer:
             info.frame_count += 1
             if camera_id not in info.cameras:
                 info.cameras.append(camera_id)
+            if not hasattr(self, "vehicles"):
+                self.vehicles = _registry.vehicles
 
             dirty = False
 

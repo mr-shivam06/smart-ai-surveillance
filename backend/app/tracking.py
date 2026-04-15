@@ -88,9 +88,9 @@ class PersonTracker:
     Name kept for backward compatibility.
 
     Config rationale:
-      max_age=30  — keep track alive 30 frames (~1s at 30fps)
+      max_age=100 — keep track alive 100 frames (~3s at 30fps)
                     prevents ID loss on brief occlusions
-      n_init=2    — confirm track after 2 consecutive frames
+      n_init=5    — confirm track after 5 consecutive frames
                     faster confirmation = fewer missed detections
       max_iou_distance=0.7 — standard, works well for pedestrians
     """
@@ -104,11 +104,11 @@ class PersonTracker:
         self._active_tracks: Dict[str,TrackResult] = {}
         # centroid history for velocity: track_id → deque[(t,cx,cy)]
         self._hist: Dict[str, deque] = {}
-        logger.info(f"[Camera-{camera_id}] PersonTracker ready (max_age=30)")
+        logger.info(f"[Camera-{camera_id}] PersonTracker ready (max_age=100)")
 
     def _build_tracker(self):
         self.tracker = DeepSort(
-            max_age=30, n_init=2, max_iou_distance=0.7,
+            max_age=100, n_init=5, max_iou_distance=0.7,
             embedder="mobilenet", half=False, bgr=True,
         )
 

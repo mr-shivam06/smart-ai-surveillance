@@ -19,9 +19,9 @@ from collections import deque
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from camera_processor import CameraProcessor
-from cross_camera_tracker import GLOBAL_TRACKER
-from stream_bridge import STREAM_BRIDGE          # same-folder import
+from app.camera_processor import CameraProcessor
+from app.cross_camera_tracker import GLOBAL_TRACKER
+from app.stream_bridge import STREAM_BRIDGE          # same-folder import
 
 
 # ─────────────────────────────────────────────────────────────

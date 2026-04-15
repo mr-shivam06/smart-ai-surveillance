@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { getCameraStreamUrl } from '../services/api'
-import { WifiOff, Maximize2 } from 'lucide-react'
+import { getCameraStreamUrl, trackingAPI } from '../services/api'
+import { WifiOff, Maximize2, RefreshCw } from 'lucide-react'
 
 export default function CameraFeed({
   cameraId,
@@ -8,6 +8,7 @@ export default function CameraFeed({
   width   = 480,
   height  = 360,
   onClick,
+  tracks  = [],
 }) {
   const canvasRef  = useRef(null)
   const wsRef      = useRef(null)
@@ -15,6 +16,7 @@ export default function CameraFeed({
   const rafRef     = useRef(null)
   const mountedRef = useRef(true)
   const retryRef   = useRef(null)
+  const clickTimeoutRef = useRef(null)
   const fpsRef     = useRef({ frames: 0, last: Date.now() })
 
   const [status, setStatus] = useState('connecting')
@@ -105,6 +107,7 @@ export default function CameraFeed({
     return () => {
       mountedRef.current = false
       clearTimeout(retryRef.current)
+      clearTimeout(clickTimeoutRef.current)
       if (rafRef.current)     cancelAnimationFrame(rafRef.current)
       if (prevUrlRef.current) URL.revokeObjectURL(prevUrlRef.current)
       if (wsRef.current) {
@@ -128,9 +131,45 @@ export default function CameraFeed({
     offline:    'var(--red)',
   }[status]
 
+  const handleClick = e => {
+    if (clickTimeoutRef.current) {
+      clearTimeout(clickTimeoutRef.current)
+      clickTimeoutRef.current = null
+      if (onClick) onClick(e)
+      return
+    }
+
+    const clientX = e.clientX
+    const clientY = e.clientY
+    clickTimeoutRef.current = setTimeout(async () => {
+      clickTimeoutRef.current = null
+      const canvas = canvasRef.current
+      const metadata = tracks.length ? tracks : (window.__trackMetadata?.[cameraId] || [])
+      let trackId = "G-001"
+      if (canvas && metadata.length) {
+        const rect = canvas.getBoundingClientRect()
+        const x = (clientX - rect.left) * (width / rect.width)
+        const y = (clientY - rect.top) * (height / rect.height)
+        const target = metadata.find(t => {
+          const b = t.bbox || t.box
+          return b && x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]
+        })
+        trackId = target?.track_id || target?.id || target?.global_id || trackId
+      }
+      await trackingAPI.select({ camera_id: cameraId, track_id: String(trackId) })
+      console.log("Tracking started:", trackId)
+    }, 250)
+  }
+
+  const handleRefresh = async e => {
+    e.stopPropagation()
+    await fetch(`/camera/${cameraId}/refresh`, { method: "POST" })
+    console.log("Camera refreshed:", cameraId)
+  }
+
   return (
     <div
-      onClick={onClick}
+      onClick={handleClick}
       style={{
         position:   'relative',
         background: '#050505',
@@ -204,6 +243,21 @@ export default function CameraFeed({
           <Maximize2 size={12} color="#fff"/>
         </div>
       )}
+
+      <button
+        type="button"
+        onClick={handleRefresh}
+        style={{
+          position:'absolute', bottom:8, left:8,
+          background:'rgba(0,0,0,0.55)',
+          border:'1px solid rgba(255,255,255,0.15)',
+          borderRadius:4, padding:'3px 5px',
+          color:'#fff', fontSize:11,
+          display:'flex', alignItems:'center', gap:4,
+        }}
+      >
+        <RefreshCw size={12}/> Refresh
+      </button>
     </div>
   )
 }
