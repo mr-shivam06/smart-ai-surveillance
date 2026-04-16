@@ -1,13 +1,12 @@
-// src/pages/LoginPage.jsx
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { Shield, Eye, EyeOff } from 'lucide-react'
+import { Shield, Eye, EyeOff, Lock, User } from 'lucide-react'
 
 export default function LoginPage() {
   const { login }              = useAuth()
   const navigate               = useNavigate()
-  const [form, setForm]        = useState({ username:'', password:'' })
+  const [form, setForm]        = useState({ username: '', password: '' })
   const [error, setError]      = useState('')
   const [loading, setLoading]  = useState(false)
   const [showPw, setShowPw]    = useState(false)
@@ -18,100 +17,119 @@ export default function LoginPage() {
     try {
       await login(form.username, form.password)
       navigate('/')
-    } catch(err) {
-      setError(err.response?.data?.detail || 'Login failed')
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Invalid credentials')
     } finally { setLoading(false) }
   }
 
   return (
-    <div style={{
-      minHeight:'100vh', display:'flex',
-      alignItems:'center', justifyContent:'center',
-      background:'var(--bg-900)',
-    }}>
-      <div style={{ width:'100%', maxWidth:400, padding:'0 20px' }}>
+    <div className="login-bg">
+      <div className="login-grid-bg" />
 
-        {/* Logo */}
-        <div style={{ textAlign:'center', marginBottom:32 }}>
-          <Shield size={40} color="var(--teal)" style={{ marginBottom:12 }}/>
-          <h1 style={{ fontSize:22, fontWeight:700, color:'var(--text-1)' }}>
-            Smart AI Surveillance
-          </h1>
-          <p style={{ color:'var(--text-3)', fontSize:13, marginTop:4 }}>
-            Sign in to your dashboard
-          </p>
+      <div style={{ width: '100%', maxWidth: 400, padding: '0 20px', position: 'relative', zIndex: 1 }} className="fade-in">
+
+        {/* Logo block */}
+        <div style={{ textAlign: 'center', marginBottom: 36 }}>
+          <div style={{
+            width: 56, height: 56,
+            background: 'var(--teal-glow)',
+            border: '1px solid rgba(0,229,204,0.3)',
+            borderRadius: 14,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 16px',
+            boxShadow: 'var(--glow-teal)',
+          }}>
+            <Shield size={26} color="var(--teal)" />
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-1)', letterSpacing: -0.5 }}>
+            SENTINEL AI
+          </div>
+          <div style={{
+            fontSize: 10, color: 'var(--teal)', fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.2em', marginTop: 4,
+          }}>
+            SURVEILLANCE SYSTEM
+          </div>
         </div>
 
-        <div className="card">
-          <form onSubmit={handle} style={{ display:'flex', flexDirection:'column', gap:16 }}>
+        {/* Card */}
+        <div className="card" style={{ borderColor: 'var(--border-bright)' }}>
+          <div style={{
+            fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.1em', marginBottom: 20,
+          }}>
+            OPERATOR AUTHENTICATION
+          </div>
+
+          <form onSubmit={handle} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Username */}
             <div>
-              <label style={{ fontSize:12, color:'var(--text-3)', display:'block', marginBottom:6 }}>
-                Username
+              <label style={{ fontSize: 11, color: 'var(--text-3)', display: 'block', marginBottom: 6, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em' }}>
+                USERNAME
               </label>
-              <input
-                type="text"
-                placeholder="Enter username"
-                value={form.username}
-                onChange={e => setForm(f=>({...f, username:e.target.value}))}
-                required
-                style={{ width:'100%' }}
-              />
+              <div style={{ position: 'relative' }}>
+                <User size={14} color="var(--text-3)" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                <input
+                  type="text"
+                  placeholder="Enter username"
+                  value={form.username}
+                  onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
+                  required
+                  style={{ paddingLeft: 34 }}
+                />
+              </div>
             </div>
 
+            {/* Password */}
             <div>
-              <label style={{ fontSize:12, color:'var(--text-3)', display:'block', marginBottom:6 }}>
-                Password
+              <label style={{ fontSize: 11, color: 'var(--text-3)', display: 'block', marginBottom: 6, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em' }}>
+                PASSWORD
               </label>
-              <div style={{ position:'relative' }}>
+              <div style={{ position: 'relative' }}>
+                <Lock size={14} color="var(--text-3)" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                 <input
                   type={showPw ? 'text' : 'password'}
                   placeholder="Enter password"
                   value={form.password}
-                  onChange={e => setForm(f=>({...f, password:e.target.value}))}
+                  onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                   required
-                  style={{ width:'100%', paddingRight:40 }}
+                  style={{ paddingLeft: 34, paddingRight: 40 }}
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPw(s=>!s)}
+                  onClick={() => setShowPw(s => !s)}
                   style={{
-                    position:'absolute', right:10, top:'50%',
-                    transform:'translateY(-50%)',
-                    background:'none', border:'none',
-                    color:'var(--text-3)', padding:0,
+                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', color: 'var(--text-3)', padding: 2, cursor: 'pointer',
                   }}
                 >
-                  {showPw ? <EyeOff size={16}/> : <Eye size={16}/>}
+                  {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
               </div>
             </div>
 
             {error && (
               <div style={{
-                padding:'10px 14px', background:'rgba(239,68,68,0.12)',
-                border:'1px solid rgba(239,68,68,0.3)',
-                borderRadius:'var(--radius)', color:'var(--red)', fontSize:13,
+                padding: '9px 12px',
+                background: 'var(--red-dim)',
+                border: '1px solid rgba(255,61,90,0.25)',
+                borderRadius: 'var(--radius)',
+                color: 'var(--red)', fontSize: 12,
+                fontFamily: 'var(--font-mono)',
               }}>
-                {error}
+                ⚠ {error}
               </div>
             )}
 
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={loading}
-              style={{ justifyContent:'center', padding:'10px' }}
-            >
-              {loading ? <><div className="spinner" style={{width:16,height:16,borderWidth:2}}/> Signing in...</> : 'Sign In'}
+            <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop: 4, height: 42, fontSize: 13, letterSpacing: '0.05em' }}>
+              {loading ? <><div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> AUTHENTICATING...</> : 'SIGN IN'}
             </button>
           </form>
 
-          <p style={{ textAlign:'center', marginTop:16, fontSize:13, color:'var(--text-3)' }}>
+          <div style={{ marginTop: 18, textAlign: 'center', fontSize: 12, color: 'var(--text-3)' }}>
             No account?{' '}
-            <Link to="/register" style={{ color:'var(--teal)', fontWeight:500 }}>
-              Register
-            </Link>
-          </p>
+            <Link to="/register" style={{ color: 'var(--teal)' }}>Register access</Link>
+          </div>
         </div>
       </div>
     </div>

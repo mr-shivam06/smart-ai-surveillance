@@ -8,3 +8,8 @@ __pycache__/
 node_modules/
 dist/
 build/
+# Ignore images
+*.jpg
+*.png
+*.jpeg
+images/

@@ -1,87 +1,107 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useState, useEffect } from 'react'
-import { alertAPI } from '../services/api'
+import { alertAPI, healthAPI } from '../services/api'
 import {
   LayoutDashboard, Camera, Bell, Car, Activity,
-  LogOut, Shield, ChevronLeft, ChevronRight
+  LogOut, Shield, ChevronLeft, ChevronRight, Radio
 } from 'lucide-react'
 
 const NAV = [
-  { to: '/',         icon: LayoutDashboard, label: 'Dashboard'  },
-  { to: '/cameras',  icon: Camera,          label: 'Cameras'    },
-  { to: '/tracking', icon: Activity,        label: 'Tracking'   },
-  { to: '/alerts',   icon: Bell,            label: 'Alerts'     },
-  { to: '/vehicles', icon: Car,             label: 'Vehicles'   },
+  { to: '/',         icon: LayoutDashboard, label: 'Dashboard',  key: 'dashboard' },
+  { to: '/cameras',  icon: Camera,          label: 'Cameras',    key: 'cameras'   },
+  { to: '/tracking', icon: Activity,        label: 'Tracking',   key: 'tracking'  },
+  { to: '/alerts',   icon: Bell,            label: 'Alerts',     key: 'alerts'    },
+  { to: '/vehicles', icon: Car,             label: 'Vehicles',   key: 'vehicles'  },
 ]
 
 export default function Layout() {
-  const { user, logout }            = useAuth()
-  const navigate                    = useNavigate()
-  const [collapsed,   setCollapsed] = useState(false)
-  const [alertCount, setAlertCount] = useState(0)
+  const { user, logout }              = useAuth()
+  const navigate                      = useNavigate()
+  const [collapsed, setCollapsed]     = useState(false)
+  const [alertCount, setAlertCount]   = useState(0)
+  const [sysOnline, setSysOnline]     = useState(true)
+  const [streamCount, setStreamCount] = useState(0)
 
   useEffect(() => {
-    const fetch = () =>
-      alertAPI.count().then(r => setAlertCount(r.data.unacknowledged)).catch(() => {})
-    fetch()
-    const id = setInterval(fetch, 5000)
+    const poll = async () => {
+      try {
+        const [ac, hc] = await Promise.all([
+          alertAPI.count(),
+          healthAPI.check(),
+        ])
+        setAlertCount(ac.data.unacknowledged)
+        setSysOnline(true)
+        setStreamCount(hc.data.streaming_cams?.length ?? 0)
+      } catch {
+        setSysOnline(false)
+      }
+    }
+    poll()
+    const id = setInterval(poll, 5000)
     return () => clearInterval(id)
   }, [])
 
-  const handleLogout = () => { logout(); navigate('/login') }
-
   return (
-    <div style={{ display:'flex', height:'100vh', overflow:'hidden' }}>
+    <div className="app-shell">
 
       {/* ── Sidebar ── */}
-      <aside style={{
-        width: collapsed ? 60 : 220,
-        background: 'var(--bg-800)',
-        borderRight: '1px solid var(--border)',
-        display: 'flex', flexDirection: 'column',
-        transition: 'width 0.2s', flexShrink: 0, overflow: 'hidden',
-      }}>
+      <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
+
         {/* Logo */}
-        <div style={{
-          padding: '18px 16px', borderBottom: '1px solid var(--border)',
-          display: 'flex', alignItems: 'center', gap: 10, minHeight: 60,
-        }}>
-          <Shield size={22} color="var(--teal)" style={{ flexShrink:0 }} />
+        <div className="sidebar-logo">
+          <Shield size={20} color="var(--teal)" style={{ flexShrink: 0 }} />
           {!collapsed && (
-            <span style={{ fontWeight:700, fontSize:13, color:'var(--teal)', whiteSpace:'nowrap' }}>
-              AI SURVEILLANCE
-            </span>
+            <div className="sidebar-logo-text">
+              SENTINEL AI
+              <span>Surveillance System</span>
+            </div>
           )}
         </div>
 
-        {/* Nav */}
-        <nav style={{ flex:1, padding:'12px 8px', display:'flex', flexDirection:'column', gap:2 }}>
-          {NAV.map(({ to, icon: Icon, label }) => (
+        {/* System status pill */}
+        {!collapsed && (
+          <div style={{
+            margin: '10px 10px 0',
+            padding: '6px 10px',
+            background: sysOnline ? 'rgba(0,230,118,0.07)' : 'rgba(255,61,90,0.07)',
+            border: `1px solid ${sysOnline ? 'rgba(0,230,118,0.18)' : 'rgba(255,61,90,0.18)'}`,
+            borderRadius: 'var(--radius)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: 10,
+            fontFamily: 'var(--font-mono)',
+            color: sysOnline ? 'var(--green)' : 'var(--red)',
+          }}>
+            <div className={sysOnline ? 'live-dot' : ''} style={!sysOnline ? {
+              width: 8, height: 8, borderRadius: '50%',
+              background: 'var(--red)', flexShrink: 0,
+            } : { flexShrink: 0 }} />
+            {sysOnline ? `ONLINE · ${streamCount} STREAM${streamCount !== 1 ? 'S' : ''}` : 'BACKEND OFFLINE'}
+          </div>
+        )}
+
+        {/* Nav links */}
+        <nav className="sidebar-nav" style={{ marginTop: collapsed ? 0 : 8 }}>
+          {NAV.map(({ to, icon: Icon, label, key }) => (
             <NavLink
-              key={to}
+              key={key}
               to={to}
               end={to === '/'}
-              style={({ isActive }) => ({
-                display:'flex', alignItems:'center', gap:10,
-                padding:'9px 10px', borderRadius:'var(--radius)',
-                color: isActive ? 'var(--teal)' : 'var(--text-2)',
-                background: isActive ? 'rgba(13,217,197,0.08)' : 'transparent',
-                fontWeight: isActive ? 600 : 400,
-                fontSize:13, whiteSpace:'nowrap', overflow:'hidden',
-                transition:'all 0.15s', position:'relative',
-              })}
+              className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
             >
-              <Icon size={17} style={{ flexShrink:0 }} />
+              <Icon size={16} style={{ flexShrink: 0 }} />
               {!collapsed && <span>{label}</span>}
-              {label === 'Alerts' && alertCount > 0 && (
+              {key === 'alerts' && alertCount > 0 && !collapsed && (
+                <span className="nav-badge">{alertCount}</span>
+              )}
+              {key === 'alerts' && alertCount > 0 && collapsed && (
                 <span style={{
-                  marginLeft:'auto', background:'var(--red)', color:'white',
-                  borderRadius:10, padding:'1px 6px', fontSize:10, fontWeight:700,
-                  display: collapsed ? 'none' : 'block',
-                }}>
-                  {alertCount}
-                </span>
+                  position: 'absolute', top: 5, right: 5,
+                  width: 7, height: 7, borderRadius: '50%',
+                  background: 'var(--red)',
+                }} />
               )}
             </NavLink>
           ))}
@@ -90,41 +110,33 @@ export default function Layout() {
         {/* Collapse toggle */}
         <button
           onClick={() => setCollapsed(c => !c)}
-          className="btn btn-ghost"
-          style={{ margin:'8px', justifyContent:'center', padding:'8px' }}
+          className="btn btn-ghost btn-sm"
+          style={{ margin: '6px 8px', justifyContent: 'center', gap: 0 }}
         >
-          {collapsed ? <ChevronRight size={16}/> : <ChevronLeft size={16}/>}
+          {collapsed ? <ChevronRight size={15} /> : <><ChevronLeft size={15} /><span style={{ marginLeft: 6, fontSize: 11 }}>Collapse</span></>}
         </button>
 
-        {/* User + logout */}
-        <div style={{ padding:'12px 8px', borderTop:'1px solid var(--border)' }}>
+        {/* User */}
+        <div className="sidebar-footer">
           {!collapsed && (
-            <div style={{ padding:'8px 10px', marginBottom:4 }}>
-              <div style={{ fontSize:12, fontWeight:600, color:'var(--text-1)' }}>
-                {user?.username}
-              </div>
-              <div style={{ fontSize:11, color:'var(--text-3)' }}>
-                {user?.email}
-              </div>
+            <div className="sidebar-user" style={{ marginBottom: 6 }}>
+              <div className="sidebar-user-name">{user?.username}</div>
+              <div className="sidebar-user-role">OPERATOR</div>
             </div>
           )}
           <button
-            onClick={handleLogout}
-            className="btn btn-ghost"
-            style={{ width:'100%', justifyContent: collapsed ? 'center' : 'flex-start' }}
+            onClick={() => { logout(); navigate('/login') }}
+            className="btn btn-ghost btn-sm"
+            style={{ width: '100%', justifyContent: collapsed ? 'center' : 'flex-start' }}
           >
-            <LogOut size={15}/>
-            {!collapsed && 'Logout'}
+            <LogOut size={14} />
+            {!collapsed && 'Sign Out'}
           </button>
         </div>
       </aside>
 
       {/* ── Main ── */}
-      <main style={{
-        flex:1, overflow:'auto',
-        background:'var(--bg-900)',
-        padding:'28px 32px',
-      }}>
+      <main className="main-content">
         <Outlet />
       </main>
     </div>

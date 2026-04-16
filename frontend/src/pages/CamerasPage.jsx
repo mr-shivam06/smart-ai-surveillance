@@ -1,17 +1,16 @@
 import { useState, useEffect } from 'react'
 import { cameraAPI } from '../services/api'
 import CameraFeed from '../components/CameraFeed'
-import { Camera, Plus, Trash2, ToggleLeft, ToggleRight,
-         Wifi, Maximize2, X } from 'lucide-react'
+import { Camera, Plus, Trash2, ToggleLeft, ToggleRight, Wifi, X, Maximize2 } from 'lucide-react'
 
 export default function CamerasPage() {
-  const [cameras,   setCameras]   = useState([])
-  const [loading,   setLoading]   = useState(true)
-  const [adding,    setAdding]    = useState(false)
-  const [form,      setForm]      = useState({ name: '', source: '' })
-  const [error,     setError]     = useState('')
-  const [showForm,  setShowForm]  = useState(false)
-  const [expanded,  setExpanded]  = useState(null)   // expanded camera id
+  const [cameras,  setCameras]  = useState([])
+  const [loading,  setLoading]  = useState(true)
+  const [adding,   setAdding]   = useState(false)
+  const [form,     setForm]     = useState({ name: '', source: '' })
+  const [error,    setError]    = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [expanded, setExpanded] = useState(null)
 
   const load = () =>
     cameraAPI.list()
@@ -41,213 +40,214 @@ export default function CamerasPage() {
     load()
   }
 
-  const toggle = async id => {
-    await cameraAPI.toggle(id)
-    load()
-  }
+  const toggle = async id => { await cameraAPI.toggle(id); load() }
 
   const activeCams = cameras.filter(c => c.is_active)
 
-  if (loading) return (
-    <div style={{ display:'flex', justifyContent:'center', padding:48 }}>
-      <div className="spinner"/>
-    </div>
-  )
+  if (loading) return <div className="loading-screen"><div className="spinner" />LOADING CAMERAS...</div>
 
   return (
-    <div>
-      {/* ── Header ── */}
+    <div className="fade-in">
+      {/* Header */}
       <div className="page-header">
         <div>
-          <h1>Live Cameras</h1>
-          <p>{activeCams.length} active · {cameras.length} total</p>
+          <div className="page-title">Live Cameras</div>
+          <div className="page-sub">{activeCams.length} ACTIVE · {cameras.length} REGISTERED</div>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowForm(s => !s)}>
-          <Plus size={15}/> Add Camera
+        <button className="btn btn-primary btn-sm" onClick={() => setShowForm(s => !s)}>
+          <Plus size={14} /> Add Camera
         </button>
       </div>
 
-      {/* ── Add form ── */}
+      {/* Add camera form */}
       {showForm && (
-        <div className="card" style={{ marginBottom: 20 }}>
-          <h3 style={{ fontSize:13, fontWeight:600, marginBottom:14 }}>Add New Camera</h3>
-          <form onSubmit={addCamera} style={{ display:'flex', flexDirection:'column', gap:12 }}>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:12 }}>
+        <div className="card fade-in" style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', letterSpacing: '0.1em' }}>
+              ADD CAMERA SOURCE
+            </div>
+            <button className="btn-icon" onClick={() => setShowForm(false)}>
+              <X size={14} />
+            </button>
+          </div>
+          <form onSubmit={addCamera} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
               <div>
-                <label style={{ fontSize:12, color:'var(--text-3)', display:'block', marginBottom:5 }}>
-                  Name
+                <label style={{ fontSize: 10, color: 'var(--text-3)', display: 'block', marginBottom: 6, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em' }}>
+                  NAME
                 </label>
                 <input
-                  placeholder="e.g. Front Door"
+                  placeholder="Front Door"
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  required style={{ width:'100%' }}
+                  required
                 />
               </div>
               <div>
-                <label style={{ fontSize:12, color:'var(--text-3)', display:'block', marginBottom:5 }}>
-                  Source
+                <label style={{ fontSize: 10, color: 'var(--text-3)', display: 'block', marginBottom: 6, fontFamily: 'var(--font-mono)', letterSpacing: '0.1em' }}>
+                  SOURCE
                 </label>
                 <input
                   placeholder="0  or  http://192.168.x.x:4747/video"
                   value={form.source}
                   onChange={e => setForm(f => ({ ...f, source: e.target.value }))}
-                  required style={{ width:'100%' }}
+                  required
                 />
               </div>
             </div>
-            {error && <div style={{ color:'var(--red)', fontSize:12 }}>{error}</div>}
-            <div style={{ display:'flex', gap:8 }}>
-              <button type="submit" className="btn btn-primary" disabled={adding}>
-                {adding ? 'Adding...' : 'Add Camera'}
+            {error && (
+              <div style={{
+                padding: '8px 12px',
+                background: 'var(--red-dim)',
+                border: '1px solid rgba(255,61,90,0.25)',
+                borderRadius: 'var(--radius)',
+                color: 'var(--red)', fontSize: 12,
+                fontFamily: 'var(--font-mono)',
+              }}>
+                ⚠ {error}
+              </div>
+            )}
+            <div style={{
+              padding: '10px 14px',
+              background: 'var(--bg-700)',
+              borderRadius: 'var(--radius)',
+              fontSize: 11, color: 'var(--text-3)',
+              fontFamily: 'var(--font-mono)',
+              lineHeight: 2,
+            }}>
+              <code style={{ color: 'var(--teal)' }}>0</code> = built-in webcam &nbsp;·&nbsp;
+              <code style={{ color: 'var(--teal)' }}>1</code> = USB cam &nbsp;·&nbsp;
+              <code style={{ color: 'var(--teal)' }}>http://IP:4747/video</code> = DroidCam
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={adding}>
+                {adding ? <><div className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} /> Adding...</> : 'Add Camera'}
               </button>
-              <button type="button" className="btn btn-ghost"
-                      onClick={() => setShowForm(false)}>Cancel</button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowForm(false)}>
+                Cancel
+              </button>
             </div>
           </form>
-
-          <div style={{
-            marginTop:14, padding:'10px 14px',
-            background:'var(--bg-700)', borderRadius:'var(--radius)',
-            fontSize:11, color:'var(--text-3)', lineHeight:1.9,
-          }}>
-            <strong style={{ color:'var(--text-2)' }}>Source:</strong>
-            &nbsp;<code style={{ color:'var(--teal)' }}>0</code> = webcam &nbsp;·&nbsp;
-            <code style={{ color:'var(--teal)' }}>1</code> = USB cam &nbsp;·&nbsp;
-            <code style={{ color:'var(--teal)' }}>http://IP:4747/video</code> = DroidCam
-          </div>
         </div>
       )}
 
-      {/* ── Expanded single camera view ── */}
+      {/* Fullscreen modal */}
       {expanded !== null && (() => {
         const cam = cameras.find(c => c.id === expanded)
         if (!cam) return null
         return (
-          <div style={{ marginBottom:20 }}>
-            <div style={{ display:'flex', justifyContent:'space-between',
-                          alignItems:'center', marginBottom:10 }}>
-              <h2 style={{ fontSize:15, fontWeight:600 }}>{cam.name} — Full View</h2>
-              <button className="btn btn-ghost" onClick={() => setExpanded(null)}>
-                <X size={15}/> Close
-              </button>
+          <div className="fullscreen-modal" onClick={() => setExpanded(null)}>
+            <div
+              style={{ width: '100%', maxWidth: 1000, position: 'relative' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)' }}>
+                  {cam.name}
+                  <span style={{ marginLeft: 10, fontSize: 10, color: 'var(--teal)', fontFamily: 'var(--font-mono)' }}>EXPANDED VIEW</span>
+                </div>
+                <button className="btn btn-ghost btn-sm" onClick={() => setExpanded(null)}>
+                  <X size={14} /> Close
+                </button>
+              </div>
+              <CameraFeed cameraId={cam.id} name={cam.name} width={960} height={720} />
             </div>
-            <CameraFeed
-              cameraId={cam.id}
-              name={cam.name}
-              width={960}
-              height={720}
-            />
           </div>
         )
       })()}
 
-      {/* ── Camera grid ── */}
-      {cameras.length === 0 ? (
+      {/* No cameras */}
+      {cameras.length === 0 && (
         <div className="card">
           <div className="empty-state">
-            <Camera size={32}/>
-            <p style={{ marginTop:8 }}>No cameras added yet</p>
-            <p style={{ fontSize:12, marginTop:4 }}>
-              Click "Add Camera" to register your first source
-            </p>
+            <Camera size={32} />
+            <p>No cameras registered</p>
+            <span>Add a camera above to start monitoring</span>
           </div>
         </div>
-      ) : (
-        <>
-          {/* Live feed grid */}
-          {activeCams.length > 0 && (
-            <div style={{ marginBottom:24 }}>
-              <h2 style={{ fontSize:13, fontWeight:600, color:'var(--text-2)',
-                           marginBottom:12 }}>
-                Live Feeds
-              </h2>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: activeCams.length === 1
-                  ? '1fr'
-                  : 'repeat(auto-fill, minmax(440px, 1fr))',
-                gap: 16,
-              }}>
-                {activeCams.map(cam => (
-                  <CameraFeed
-                    key={cam.id}
-                    cameraId={cam.id}
-                    name={cam.name}
-                    width={480}
-                    height={360}
-                    onClick={() => setExpanded(cam.id)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+      )}
 
-          {/* Camera management table */}
-          <div className="card">
-            <h3 style={{ fontSize:13, fontWeight:600, color:'var(--text-2)', marginBottom:14 }}>
+      {/* Live feed grid */}
+      {activeCams.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div className="section-label">Live Feeds</div>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: activeCams.length === 1 ? '1fr' : 'repeat(auto-fill, minmax(440px, 1fr))',
+            gap: 14,
+          }}>
+            {activeCams.map(cam => (
+              <div key={cam.id} className="feed-wrapper live">
+                <CameraFeed
+                  cameraId={cam.id}
+                  name={cam.name}
+                  width={480}
+                  height={360}
+                  onClick={() => setExpanded(cam.id)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Management table */}
+      {cameras.length > 0 && (
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px 0' }}>
+            <div className="card-header">
+              <Camera size={13} color="var(--teal)" />
               Camera Management
-            </h3>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>ID</th><th>Name</th><th>Source</th>
-                    <th>Status</th><th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cameras.map(cam => (
-                    <tr key={cam.id}>
-                      <td style={{ color:'var(--text-3)' }}>#{cam.id}</td>
-                      <td style={{ fontWeight:500, color:'var(--text-1)' }}>{cam.name}</td>
-                      <td>
-                        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                          <Wifi size={12} color="var(--text-3)"/>
-                          <code style={{ fontSize:11 }}>{cam.source}</code>
-                        </div>
-                      </td>
-                      <td>
-                        <span className={`badge ${cam.is_active ? 'badge-green' : 'badge-red'}`}>
-                          {cam.is_active ? '● Active' : '○ Inactive'}
-                        </span>
-                      </td>
-                      <td>
-                        <div style={{ display:'flex', gap:6 }}>
-                          <button
-                            className="btn btn-ghost"
-                            onClick={() => toggle(cam.id)}
-                            style={{ fontSize:11, padding:'4px 10px' }}
-                          >
-                            {cam.is_active
-                              ? <><ToggleRight size={13}/> Disable</>
-                              : <><ToggleLeft  size={13}/> Enable</>}
-                          </button>
-                          {cam.is_active && (
-                            <button
-                              className="btn btn-ghost"
-                              onClick={() => setExpanded(cam.id)}
-                              style={{ fontSize:11, padding:'4px 10px' }}
-                            >
-                              <Maximize2 size={13}/> Expand
-                            </button>
-                          )}
-                          <button
-                            className="btn btn-danger"
-                            onClick={() => remove(cam.id)}
-                            style={{ fontSize:11, padding:'4px 8px' }}
-                          >
-                            <Trash2 size={13}/>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           </div>
-        </>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th><th>Name</th><th>Source</th><th>Status</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cameras.map(cam => (
+                  <tr key={cam.id}>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-3)' }}>
+                      #{cam.id}
+                    </td>
+                    <td style={{ fontWeight: 600, color: 'var(--text-1)' }}>{cam.name}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Wifi size={12} color="var(--text-3)" />
+                        <code style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-2)' }}>
+                          {cam.source}
+                        </code>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`badge ${cam.is_active ? 'badge-green' : 'badge-red'}`}>
+                        {cam.is_active ? '● ACTIVE' : '○ INACTIVE'}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => toggle(cam.id)}>
+                          {cam.is_active ? <><ToggleRight size={13} /> Disable</> : <><ToggleLeft size={13} /> Enable</>}
+                        </button>
+                        {cam.is_active && (
+                          <button className="btn btn-ghost btn-sm" onClick={() => setExpanded(cam.id)}>
+                            <Maximize2 size={13} />
+                          </button>
+                        )}
+                        <button className="btn btn-danger btn-sm" onClick={() => remove(cam.id)}>
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   )
