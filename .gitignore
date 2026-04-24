@@ -13,3 +13,7 @@ build/
 *.png
 *.jpeg
 images/
+# videos
+*.mp4
+videos/
+backend/videos/
