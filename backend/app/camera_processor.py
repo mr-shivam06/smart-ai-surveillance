@@ -4,28 +4,56 @@
   File    : backend/app/camera_processor.py
   Purpose : Per-camera orchestrator — single draw authority.
 
-  DAY 12 ADDITIONS:
-    - Fire/smoke overlay: red tint applied to frame when
-      self.behavior.fire.has_fire is True
-    - self.behavior.fire.draw() draws fire/smoke bboxes
-    - show_fire_tint toggle ('F' key in main.py)
-    - Fire status shown in HUD (🔥 badge)
+  DAY 13 — PERFORMANCE REFACTOR:
+
+  1. SHARED YOLO MODEL
+     self.detector removed. All cameras now use SHARED_DETECTOR
+     (one singleton model, one inference thread, round-robin).
+     Before: 2 cameras = 2 YOLO models = ~100MB RAM + concurrent
+             CPU thrashing between inference threads.
+     After:  1 model, 1 inference thread, serialized = clean CPU.
+
+  2. STAGGERED FRAME OFFSETS
+     cam_id=1 detects on frames 0, N, 2N ...
+     cam_id=2 detects on frames 1, N+1, 2N+1 ...
+     Distributes inference load evenly across cameras.
+     No camera starves when inference is slow.
+
+  3. ASYNC FACE RECOGNITION (retained from Day 12)
+     Runs in background daemon thread — never blocks pipeline.
+
+  4. BEHAVIOR ANALYSIS every 2nd frame (retained).
+
+  5. grab×4 for IP cameras (retained).
+
+  PIPELINE ORDER (unchanged):
+    capture → SHARED_DETECTOR.infer() → track →
+    face(bg) → global_ids → vehicle →
+    behavior(÷2) → trails → target → draw
 =============================================================
 """
 
-import cv2, numpy as np, logging, time, threading
+import cv2
+import numpy as np
+import logging
+import time
+import threading
 from collections import deque
 from typing import List, Tuple, Optional
 
-from app.detection import ObjectDetector, FrameResult, _get_color
+from app.detection import FrameResult, _get_color, Detection, BoundingBox
 from app.tracking import PersonTracker, TrackResult
 from app.target_manager import TargetManager
 from app.cross_camera_tracker import GLOBAL_TRACKER
 from app.vehicle_analysis import VehicleAnalyzer, VEHICLE_CLASS_IDS
 from app.behavior_analysis import BehaviorAnalyzer
 from app.alert_system import ALERT_SYSTEM
+from app.shared_model import SHARED_DETECTOR
 
 logging.basicConfig(level=logging.INFO)
+
+MIN_DETECTION_AREA  = 1200
+DETECTION_INTERVAL  = 3     # run detection every N frames (per camera)
 
 
 def _iou(a: Tuple, b: Tuple) -> float:
@@ -38,9 +66,19 @@ def _iou(a: Tuple, b: Tuple) -> float:
     return inter/union if union > 0 else 0.0
 
 
+def _to_frame_result(det_result) -> FrameResult:
+    """Convert SharedDetector result to FrameResult for compatibility."""
+    fr = FrameResult(
+        detections   = det_result.detections,
+        inference_ms = det_result.inference_ms,
+        frame_index  = det_result.frame_index,
+    )
+    return fr
+
+
 class CameraProcessor:
 
-    DEDUP_IOU           = 0.45
+    DEDUP_IOU            = 0.45
     UNCONFIRMED_MIN_CONF = 0.55
 
     def __init__(self, camera_id: int, source=0):
@@ -57,14 +95,17 @@ class CameraProcessor:
         if self.cap is None or not self.cap.isOpened():
             self.logger.warning(f"Camera {camera_id} — no signal.")
 
-        self.detector = ObjectDetector(
-            camera_id=camera_id, model_path="backend/yolov8n.pt",
-            confidence=0.45, img_size=320,
-        )
-        self.detector.detection_interval = 2 if self.is_ip else 3
+        # DAY 13: Register with shared detector — no per-camera model
+        SHARED_DETECTOR.register_camera(camera_id)
 
+        # Staggered detection offset: cam1→frame 0,3,6  cam2→frame 1,4,7
+        self._detect_offset   = (camera_id - 1) % DETECTION_INTERVAL
+        self._frame_count     = 0
+        self._last_det_result = None   # cached between inference frames
+
+        # Tracking (still per-camera — DeepSort is not thread-safe to share)
         self.tracker          = PersonTracker(camera_id)
-        self.tracker.set_class_names(self.detector.class_names)
+        self.tracker.set_class_names(SHARED_DETECTOR.class_names)
         self.target_manager   = TargetManager(camera_id)
         self.vehicle_analyzer = VehicleAnalyzer(camera_id)
         self.behavior         = BehaviorAnalyzer(camera_id, self.tracker)
@@ -77,8 +118,10 @@ class CameraProcessor:
         self._face_lock       = threading.Lock()
         self._face_frame_buf  = None
         self._face_frame_lock = threading.Lock()
-        threading.Thread(target=self._face_worker, daemon=True,
-                         name=f"FaceWorker-{camera_id}").start()
+        threading.Thread(
+            target=self._face_worker, daemon=True,
+            name=f"FaceWorker-{camera_id}"
+        ).start()
 
         # Display toggles
         self._trails       : dict = {}
@@ -87,14 +130,21 @@ class CameraProcessor:
         self.show_debug_id : bool = False
         self.show_heatmap  : bool = False
         self.show_zones    : bool = True
-        self.show_fire_tint: bool = True   # DAY 12: red tint on fire
+        self.show_fire_tint: bool = True
 
         self._behavior_frame = 0
         self.prev_time = time.time()
         self.fps_queue = deque(maxlen=10)
         self.avg_fps   = 0.0
 
-        self.logger.info(f"CameraProcessor ready cam={camera_id} ip={self.is_ip}")
+        # For HUD — track last inference ms from shared detector
+        self._last_inference_ms = 0.0
+
+        self.logger.info(
+            f"CameraProcessor ready cam={camera_id} ip={self.is_ip} "
+            f"offset={self._detect_offset}/{DETECTION_INTERVAL} "
+            f"[shared YOLO]"
+        )
 
     # ── Background face worker ────────────────────────────────
 
@@ -124,6 +174,7 @@ class CameraProcessor:
         if self.cap is None or not self.cap.isOpened():
             return self._no_signal()
 
+        # Drain IP camera buffer — prevents visual lag
         if self.is_ip:
             for _ in range(4): self.cap.grab()
 
@@ -139,31 +190,41 @@ class CameraProcessor:
 
         frame = cv2.resize(frame, (self.frame_width, self.frame_height))
 
-        now = time.time(); diff = now - self.prev_time
+        now  = time.time(); diff = now - self.prev_time
         if diff > 0:
-            self.fps_queue.append(1.0/diff)
-            self.avg_fps = sum(self.fps_queue)/len(self.fps_queue)
+            self.fps_queue.append(1.0 / diff)
+            self.avg_fps = sum(self.fps_queue) / len(self.fps_queue)
         self.prev_time = now
 
         # Feed background face worker
         with self._face_frame_lock:
             self._face_frame_buf = frame.copy()
 
-        # 1 — Detect
-        result = self.detector.detect(frame)
+        # ── 1. Detection via SHARED_DETECTOR ──────────────────
+        # Staggered: only call infer() on this camera's scheduled frames
+        self._frame_count += 1
+        if (self._frame_count % DETECTION_INTERVAL) == self._detect_offset:
+            det_result = SHARED_DETECTOR.infer(self.camera_id, frame)
+            self._last_det_result  = det_result
+            self._last_inference_ms = det_result.inference_ms
+        else:
+            # Use cached result on non-inference frames
+            det_result = self._last_det_result or SHARED_DETECTOR.get_last_result(self.camera_id)
 
-        # 2 — Track
+        result = _to_frame_result(det_result)
+
+        # ── 2. Track ──────────────────────────────────────────
         tracked: List[TrackResult] = self.tracker.update_tracks(
             result.to_deepsort_format(), frame
         )
 
-        # 3 — Face results
+        # ── 3. Face results from background thread ─────────────
         with self._face_lock:
             face_res = self._face_result
         if face_res is not None:
             self._attach_face_ids(face_res, tracked)
 
-        # 4 — Global IDs
+        # ── 4. Global IDs (cross-camera ReID) ─────────────────
         GLOBAL_TRACKER.assign_global_ids(
             camera_id=self.camera_id, tracked_objects=tracked, frame=frame
         )
@@ -174,10 +235,10 @@ class CameraProcessor:
         for gid in list(self.last_seen):
             if seen_now - self.last_seen[gid] >= 2: del self.last_seen[gid]
 
-        # 5 — Vehicle analysis
+        # ── 5. Vehicle analysis ───────────────────────────────
         self.vehicle_analyzer.update(tracked, frame, self.camera_id)
 
-        # 6 — Feed vehicle info to target panel
+        # Feed vehicle info to target panel
         if self.target_manager.has_target:
             vinfo = self.vehicle_analyzer.get_info(self.target_manager.target_id)
             if vinfo:
@@ -185,25 +246,24 @@ class CameraProcessor:
                     vinfo.color_name, vinfo.shape_type
                 )
 
-        # 7 — Behavior analysis (every 2nd frame)
+        # ── 6. Behavior analysis (every 2nd frame) ────────────
         self._behavior_frame += 1
         if self._behavior_frame % 2 == 0:
             self.behavior.update(tracked, frame)
 
-        # 8 — Trails + target
+        # ── 7. Trails + target ────────────────────────────────
         self._attach_track_ids(result, tracked)
         self._update_trails(tracked)
         self.target_manager.update(tracked, frame)
 
-        # 9 — Draw
+        # ── 8. Draw ───────────────────────────────────────────
         out = frame.copy()
 
-        # DAY 12: Red tint when fire detected
         if self.show_fire_tint and self.behavior.fire.has_fire:
             out = self._apply_fire_tint(out)
 
         out = self._draw_all(out, result, tracked)
-        out = self.behavior.fire.draw(out)   # DAY 12: fire/smoke boxes
+        out = self.behavior.fire.draw(out)
 
         if self.show_trails:  out = self._draw_trails(out, tracked)
         if self.show_zones:   out = self.behavior.zones.draw_zones(out)
@@ -224,17 +284,20 @@ class CameraProcessor:
     # ── Fire tint ─────────────────────────────────────────────
 
     def _apply_fire_tint(self, frame: np.ndarray) -> np.ndarray:
-        """
-        Red tint overlay when fire is active.
-        Pulsing effect by varying alpha with time.
-        """
         alpha   = 0.25 + 0.10 * abs(np.sin(time.time() * 4))
         overlay = frame.copy()
-        overlay[:, :, 0] = np.clip(overlay[:, :, 0].astype(int) * 0.4, 0, 255)
-        overlay[:, :, 1] = np.clip(overlay[:, :, 1].astype(int) * 0.4, 0, 255)
+        overlay[:,:,0] = np.clip(overlay[:,:,0].astype(int)*0.4, 0, 255)
+        overlay[:,:,1] = np.clip(overlay[:,:,1].astype(int)*0.4, 0, 255)
         return cv2.addWeighted(overlay, alpha, frame, 1-alpha, 0)
 
     # ── Draw ──────────────────────────────────────────────────
+
+    def _is_cross(self, t) -> bool:
+        return (t.global_id is not None and
+                GLOBAL_TRACKER._gallery.get(
+                    t.global_id,
+                    type("",(),{"is_cross_camera":lambda s:False})()
+                ).is_cross_camera())
 
     def _draw_all(self, frame, result, tracked):
         font = cv2.FONT_HERSHEY_SIMPLEX; fs = 0.42
@@ -242,10 +305,10 @@ class CameraProcessor:
 
         for t in tracked:
             x1, y1, x2, y2 = t.bbox
-            is_vehicle  = t.class_id in VEHICLE_CLASS_IDS
-            display_id  = t.global_id if t.global_id else t.id
-            target_id   = self.target_manager.target_id
-            is_target   = (target_id and (
+            is_vehicle = t.class_id in VEHICLE_CLASS_IDS
+            display_id = t.global_id if t.global_id else t.id
+            target_id  = self.target_manager.target_id
+            is_target  = (target_id and (
                 str(display_id) == str(target_id) or
                 str(t.id) == str(target_id)
             ))
@@ -254,14 +317,14 @@ class CameraProcessor:
                 box_col = badge_col = (50, 50, 50)
             elif is_vehicle:
                 is_cross = self._is_cross(t)
-                box_col   = (0, 200, 255) if is_cross else (0, 180, 255)
-                badge_col = (0, 120, 180) if is_cross else (0, 110, 180)
+                box_col   = (0,200,255) if is_cross else (0,180,255)
+                badge_col = (0,120,180) if is_cross else (0,110,180)
             else:
                 is_cross = self._is_cross(t)
-                box_col   = (0, 220, 220) if is_cross else (0, 210, 0)
-                badge_col = (0, 130, 130) if is_cross else (0, 130, 0)
+                box_col   = (0,220,220) if is_cross else (0,210,0)
+                badge_col = (0,130,130) if is_cross else (0,130,0)
 
-            cv2.rectangle(frame, (x1,y1), (x2,y2), box_col, 2)
+            cv2.rectangle(frame,(x1,y1),(x2,y2),box_col,2)
 
             dwell     = self.behavior.dwell.get_dwell(display_id)
             dwell_tag = f" {int(dwell)}s" if dwell >= 10 else ""
@@ -305,7 +368,7 @@ class CameraProcessor:
                 cv2.rectangle(frame,(x1,y2),(x1+dw+6,y2+dh+4),(40,40,40),-1)
                 cv2.putText(frame,dbg,(x1+3,y2+dh+1),font,0.32,(160,160,160),1,cv2.LINE_AA)
 
-        # Unconfirmed — only high-confidence, non-overlapping
+        # Unconfirmed — high confidence + not overlapping confirmed
         for d in result.detections:
             if d.confidence < self.UNCONFIRMED_MIN_CONF: continue
             db=(d.box.x1,d.box.y1,d.box.x2,d.box.y2)
@@ -319,13 +382,6 @@ class CameraProcessor:
             cv2.putText(frame,lbl,(b.x1+3,by2-2),font,0.38,(255,255,255),1,cv2.LINE_AA)
 
         return frame
-
-    def _is_cross(self, t) -> bool:
-        return (t.global_id is not None and
-                GLOBAL_TRACKER._gallery.get(
-                    t.global_id,
-                    type("",(),{"is_cross_camera":lambda s:False})()
-                ).is_cross_camera())
 
     def _draw_trails(self, frame, tracked):
         for t in tracked:
@@ -359,13 +415,11 @@ class CameraProcessor:
         cv2.putText(frame,f"V:{vc}",(144,ty),font,0.42,(0,180,255),1,cv2.LINE_AA)
         cv2.putText(frame,ts,(178,ty),font,0.40,tc,1,cv2.LINE_AA)
 
-        # DAY 12: Fire badge in HUD
         if self.behavior.fire.has_fire:
-            fire_badge = "FIRE"
-            (fw,fh),_=cv2.getTextSize(fire_badge,font,0.40,1)
+            (fw,fh),_=cv2.getTextSize("FIRE",font,0.40,1)
             fx=222; fy_top=bar_y+3
             cv2.rectangle(frame,(fx-3,fy_top),(fx+fw+3,fy_top+fh+4),(0,0,200),-1)
-            cv2.putText(frame,fire_badge,(fx,fy_top+fh+1),font,0.40,(255,255,255),1,cv2.LINE_AA)
+            cv2.putText(frame,"FIRE",(fx,fy_top+fh+1),font,0.40,(255,255,255),1,cv2.LINE_AA)
         elif self.behavior.fire.has_smoke:
             cv2.putText(frame,"SMOKE",(222,ty),font,0.38,(160,160,160),1,cv2.LINE_AA)
 
@@ -377,7 +431,8 @@ class CameraProcessor:
             cv2.rectangle(frame,(bx-3,by_top),(bx+bw+3,by_top+bh+4),(0,0,180),-1)
             cv2.putText(frame,badge,(bx,by_top+bh+1),font,0.40,(255,255,255),1,cv2.LINE_AA)
 
-        ms=f"{self.detector.last_result.inference_ms:.0f}ms"
+        # DAY 13: Show shared inference ms
+        ms=f"{self._last_inference_ms:.0f}ms"
         (mw,_),_=cv2.getTextSize(ms,font,0.38,1)
         cv2.putText(frame,ms,(w-mw-4,ty),font,0.38,(130,130,130),1,cv2.LINE_AA)
 
@@ -392,8 +447,7 @@ class CameraProcessor:
     def _update_trails(self, tracked):
         active=set()
         for t in tracked:
-            did=t.global_id if t.global_id else t.id
-            active.add(did)
+            did=t.global_id if t.global_id else t.id; active.add(did)
             if did not in self._trails: self._trails[did]=deque(maxlen=20)
             self._trails[did].append(t.centroid)
         for tid in list(self._trails):
@@ -402,8 +456,7 @@ class CameraProcessor:
 
     def _attach_track_ids(self, result, tracked):
         for track in tracked:
-            tx1,ty1,tx2,ty2=track.bbox
-            tcx=(tx1+tx2)//2; tcy=(ty1+ty2)//2
+            tx1,ty1,tx2,ty2=track.bbox; tcx=(tx1+tx2)//2; tcy=(ty1+ty2)//2
             best_det=None; best_d=float("inf")
             for det in result.detections:
                 dx,dy=det.box.center; d=abs(dx-tcx)+abs(dy-tcy)

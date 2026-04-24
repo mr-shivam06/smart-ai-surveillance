@@ -5,13 +5,12 @@
   Purpose : FastAPI application entry point.
 
   Run from backend/ folder:
-    uvicorn app.api_main:app --reload --port 8000
+    set PYTHONPATH=. && uvicorn app.api_main:app --reload --port 8000
 
-  STARTUP BEHAVIOUR:
-    On startup, reads all active cameras from the database
-    and starts their AI pipeline threads automatically.
-    This means you don't need to toggle each camera after
-    restarting the server — they resume automatically.
+  Or from project root:
+    set PYTHONPATH=backend && uvicorn app.api_main:app --reload --port 8000
+
+  Docs: http://localhost:8000/docs
 =============================================================
 """
 
@@ -50,7 +49,7 @@ app.add_middleware(
 def on_startup():
     init_db()
 
-    # Auto-start all cameras that were active when server last ran
+    # Auto-start all cameras that were active in DB
     try:
         from app.db.database import SessionLocal
         from app.models.camera_model import Camera
@@ -61,27 +60,26 @@ def on_startup():
         db.close()
 
         if active_cams:
-            print(f"[Startup] Auto-starting {len(active_cams)} active camera(s)...")
+            print(f"[Startup] Auto-starting {len(active_cams)} camera(s)...")
             for cam in active_cams:
                 start_camera(cam.id, cam.source)
-                print(f"[Startup]   → Camera {cam.id} '{cam.name}' (source={cam.source!r})")
+                print(f"[Startup]   → Cam {cam.id} '{cam.name}' ({cam.source!r})")
         else:
-            print("[Startup] No active cameras in DB. Add cameras via the dashboard.")
+            print("[Startup] No active cameras. Add cameras via the dashboard.")
 
     except Exception as e:
-        print(f"[Startup] Camera auto-start failed: {e}")
+        print(f"[Startup] Camera auto-start error: {e}")
 
 # ── REST routers ──────────────────────────────────────────────
-app.include_router(routes_auth.router,     prefix="/auth",     tags=["Auth"])
-app.include_router(routes_camera.refresh_router, tags=["Cameras"])
-app.include_router(routes_camera.router,   prefix="/cameras",  tags=["Cameras"])
-app.include_router(routes_tracking.router, prefix="/tracking", tags=["Tracking"])
-app.include_router(routes_alerts.router,   prefix="/alerts",   tags=["Alerts"])
-app.include_router(routes_vehicles.router, prefix="/vehicles", tags=["Vehicles"])
+app.include_router(routes_auth.router,            prefix="/auth",     tags=["Auth"])
+app.include_router(routes_camera.refresh_router,                      tags=["Cameras"])
+app.include_router(routes_camera.router,          prefix="/cameras",  tags=["Cameras"])
+app.include_router(routes_tracking.router,        prefix="/tracking", tags=["Tracking"])
+app.include_router(routes_alerts.router,          prefix="/alerts",   tags=["Alerts"])
+app.include_router(routes_vehicles.router,        prefix="/vehicles", tags=["Vehicles"])
 
 # ── WebSocket stream ──────────────────────────────────────────
-# ws://localhost:8000/stream/{camera_id}?token=<jwt>
-app.include_router(routes_stream.router,   prefix="/stream",   tags=["Stream"])
+app.include_router(routes_stream.router,          prefix="/stream",   tags=["Stream"])
 
 # ── Health ────────────────────────────────────────────────────
 @app.get("/", tags=["Health"])

@@ -40,7 +40,7 @@ class UserOut(BaseModel):
 
 class CameraCreate(BaseModel):
     name   : str
-    source : str   # "0" for webcam, URL for IP
+    source : str   # "0" for webcam, URL for IP cam
 
 class CameraOut(BaseModel):
     id        : int
@@ -62,9 +62,9 @@ class TrackingStatus(BaseModel):
     reid_backend       : str
 
 class GlobalIDInfo(BaseModel):
-    global_id   : str
-    cameras     : List[int]
-    class_name  : str
+    global_id  : str
+    cameras    : List[int]
+    class_name : str
 
 
 # ── Alerts ────────────────────────────────────────────────────

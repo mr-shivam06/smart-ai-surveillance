@@ -2,9 +2,18 @@
 =============================================================
   SMART AI SURVEILLANCE SYSTEM
   File    : backend/app/main.py
-  Purpose : Entry point — camera threads, grid display, keys.
+  Purpose : Entry point — camera threads, grid display.
 
-  DAY 12: Added 'F' key to toggle fire tint overlay.
+  DAY 13: Uses SHARED_DETECTOR (one YOLO model for all cams).
+  DAY 14: Demo mode — set DEMO_MODE=1 in .env to use videos.
+
+  Run:
+    Terminal 1: set PYTHONPATH=backend && uvicorn app.api_main:app --reload --port 8000
+    Terminal 2: cd backend && python app/main.py
+
+  Demo mode:
+    set DEMO_MODE=1
+    python app/main.py
 =============================================================
 """
 
@@ -16,12 +25,26 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from app.camera_processor import CameraProcessor
 from app.cross_camera_tracker import GLOBAL_TRACKER
 from app.stream_bridge import STREAM_BRIDGE
+from app.shared_model import SHARED_DETECTOR
+from app.demo_mode import DEMO_MODE, DEMO_INJECTOR, get_demo_source
 
 
-CAMERA_SOURCES = [
+# ── Camera configuration ──────────────────────────────────────
+_BASE_CAMERAS = [
     {"id": 1, "source": 0,                                "name": "Laptop Cam"},
-    {"id": 2, "source": "http://10.68.66.230:4747/video", "name": "Mobile Cam"},
+    {"id": 2, "source": "http://10.54.125.53:4747/video", "name": "Mobile Cam"},
 ]
+
+# In demo mode, replace sources with video files
+if DEMO_MODE:
+    CAMERA_SOURCES = [
+        {"id": c["id"], "source": get_demo_source(c["id"]), "name": f"{c['name']} [DEMO]"}
+        for c in _BASE_CAMERAS
+    ]
+    print("\n[DEMO MODE] Using pre-recorded video files.")
+    print("[DEMO MODE] Events will fire automatically at scheduled timestamps.\n")
+else:
+    CAMERA_SOURCES = _BASE_CAMERAS
 
 WINDOW_TITLE = "Smart AI Surveillance"
 TITLE_BAR_H  = 36
@@ -35,9 +58,9 @@ running       = True
 def _no_signal(cam_id, name):
     f = np.zeros((360, 480, 3), dtype=np.uint8)
     cx, cy = 240, 150
-    cv2.circle(f, (cx,cy), 28, (0,0,180), -1)
-    cv2.line(f, (cx-16,cy-16),(cx+16,cy+16),(255,255,255),4)
-    cv2.line(f, (cx+16,cy-16),(cx-16,cy+16),(255,255,255),4)
+    cv2.circle(f,(cx,cy),28,(0,0,180),-1)
+    cv2.line(f,(cx-16,cy-16),(cx+16,cy+16),(255,255,255),4)
+    cv2.line(f,(cx+16,cy-16),(cx-16,cy+16),(255,255,255),4)
     font = cv2.FONT_HERSHEY_SIMPLEX
     cv2.putText(f,f"Camera {cam_id} — {name}",(cx-90,cy+52),font,0.50,(200,200,200),1,cv2.LINE_AA)
     cv2.putText(f,"NO SIGNAL",(cx-58,cy+80),font,0.70,(0,0,255),2,cv2.LINE_AA)
@@ -71,74 +94,76 @@ def camera_worker(cfg):
 def build_grid(frames_dict):
     if not frames_dict: return None, 1, 1
     ordered = [frames_dict[k] for k in sorted(frames_dict.keys())]
-    n = len(ordered)
-    cols = int(np.ceil(np.sqrt(n))); rows = int(np.ceil(n/cols))
-    h, w = ordered[0].shape[:2]
-    while len(ordered) < rows*cols:
-        ordered.append(np.zeros((h,w,3),dtype=np.uint8))
-    grid = np.vstack([np.hstack(ordered[r*cols:(r+1)*cols]) for r in range(rows)])
+    n=len(ordered); cols=int(np.ceil(np.sqrt(n))); rows=int(np.ceil(n/cols))
+    h,w=ordered[0].shape[:2]
+    while len(ordered)<rows*cols: ordered.append(np.zeros((h,w,3),dtype=np.uint8))
+    grid=np.vstack([np.hstack(ordered[r*cols:(r+1)*cols]) for r in range(rows)])
     return grid, cols, rows
 
 
 def draw_title_bar(grid, avg_fps, procs):
-    gw = grid.shape[1]; font = cv2.FONT_HERSHEY_SIMPLEX
+    gw=grid.shape[1]; font=cv2.FONT_HERSHEY_SIMPLEX
     cv2.rectangle(grid,(0,0),(gw,TITLE_BAR_H),(12,12,12),-1)
     cv2.line(grid,(0,TITLE_BAR_H),(gw,TITLE_BAR_H),(55,55,55),1)
-    cv2.putText(grid,"SMART AI SURVEILLANCE",(10,25),font,0.62,(0,220,220),2,cv2.LINE_AA)
+
+    title = "SMART AI SURVEILLANCE [DEMO]" if DEMO_MODE else "SMART AI SURVEILLANCE"
+    title_color = (0,200,255) if DEMO_MODE else (0,220,220)
+    cv2.putText(grid,title,(10,25),font,0.58,title_color,2,cv2.LINE_AA)
 
     status = GLOBAL_TRACKER.get_status()
     streaming = len(STREAM_BRIDGE.active_camera_ids())
-
-    # Fire alert in title bar
-    any_fire = any(
-        getattr(getattr(proc, 'behavior', None), 'fire', None) and
-        proc.behavior.fire.has_fire
-        for proc in procs.values()
+    any_fire  = any(
+        getattr(getattr(p,'behavior',None),'fire',None) and p.behavior.fire.has_fire
+        for p in procs.values()
     )
     if any_fire:
-        cv2.putText(grid," 🔥 FIRE DETECTED ",(gw//2-80,25),font,0.50,(0,60,255),2,cv2.LINE_AA)
+        fw,_ = cv2.getTextSize("  FIRE DETECTED  ",font,0.50,2)[0]
+        cv2.putText(grid," FIRE DETECTED ",(gw//2-fw//2,25),font,0.50,(0,60,255),2,cv2.LINE_AA)
     else:
-        mid = (f"FPS:{int(avg_fps)}  IDs:{status['total_identities']}  "
-               f"Cross:{status['cross_camera_matches']}  Stream:{streaming}")
-        (fw,_),_ = cv2.getTextSize(mid,font,0.42,1)
-        cv2.putText(grid,mid,(gw//2-fw//2,25),font,0.42,(0,200,80),1,cv2.LINE_AA)
+        mid=(f"FPS:{int(avg_fps)}  IDs:{status['total_identities']}  "
+             f"Cross:{status['cross_camera_matches']}  Stream:{streaming}  [shared YOLO]")
+        (fw,_),_=cv2.getTextSize(mid,font,0.40,1)
+        cv2.putText(grid,mid,(gw//2-fw//2,25),font,0.40,(0,200,80),1,cv2.LINE_AA)
 
-    target_parts = []
+    target_parts=[]
     for cid,proc in sorted(procs.items()):
-        info = proc.target_manager.get_target_info()
+        info=proc.target_manager.get_target_info()
         if info: target_parts.append(f"Cam{cid}:{info['target_id']}")
-
-    rt = ("Target: "+"  ".join(target_parts) if target_parts
-          else "L:target  R:clear  T:trails  D:debug  H:heat  Z:zones  F:fire  S:snap  Q:quit")
-    rc = (80,80,255) if target_parts else (80,80,80)
-    (rw,_),_=cv2.getTextSize(rt,font,0.36,1)
-    cv2.putText(grid,rt,(gw-rw-10,25),font,0.36,rc,1,cv2.LINE_AA)
+    rt=("Target: "+"  ".join(target_parts) if target_parts
+        else "L:target  R:clear  T:trails  D:debug  H:heat  Z:zones  F:fire  S:snap  Q:quit")
+    rc=(80,80,255) if target_parts else (80,80,80)
+    (rw,_),_=cv2.getTextSize(rt,font,0.34,1)
+    cv2.putText(grid,rt,(gw-rw-10,25),font,0.34,rc,1,cv2.LINE_AA)
     return grid
 
 
 if __name__ == "__main__":
     print("\n========== SMART AI MULTI-CAMERA SURVEILLANCE ==========\n")
+    print(f"[INFO] Mode: {'DEMO (video files)' if DEMO_MODE else 'LIVE (cameras)'}")
+    print(f"[INFO] Shared YOLO model — 1 model for {len(CAMERA_SOURCES)} cameras")
     print("[INFO] Green=local  Cyan=cross-camera  Orange=vehicle")
-    print("[INFO] DAY 12: Fire detection active — red tint on fire event")
-    print("[INFO] Keys: L=target R=clear T=trails D=debug H=heatmap Z=zones F=fire S=snap Q=quit\n")
+    print("[INFO] Keys: L=target R=clear T=trails D=debug H=heat Z=zones F=fire S=snap Q=quit\n")
+
+    # Start demo event injector
+    if DEMO_MODE:
+        DEMO_INJECTOR.start()
 
     for cfg in CAMERA_SOURCES:
         threading.Thread(target=camera_worker,args=(cfg,),daemon=True).start()
-        time.sleep(0.3)
+        time.sleep(0.4)
 
     print("[INFO] Initialising cameras...")
     time.sleep(1.5)
 
     cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_NORMAL)
 
-    fps_queue   = deque(maxlen=20)
-    prev_time   = time.time()
-    grid_layout = {"cols":1,"rows":1,"fw":480,"fh":360}
+    fps_queue=deque(maxlen=20); prev_time=time.time()
+    grid_layout={"cols":1,"rows":1,"fw":480,"fh":360}
 
     def on_mouse(event, x, y, flags, param):
-        if event not in (cv2.EVENT_LBUTTONDOWN, cv2.EVENT_RBUTTONDOWN): return
-        y_adj = y - TITLE_BAR_H
-        if y_adj < 0: return
+        if event not in (cv2.EVENT_LBUTTONDOWN,cv2.EVENT_RBUTTONDOWN): return
+        y_adj=y-TITLE_BAR_H
+        if y_adj<0: return
         cols=grid_layout["cols"]; fw=grid_layout["fw"]; fh=grid_layout["fh"]
         col_idx=x//fw; row_idx=y_adj//fh; cam_idx=row_idx*cols+col_idx
         with lock:
@@ -151,6 +176,7 @@ if __name__ == "__main__":
 
     cv2.setMouseCallback(WINDOW_TITLE, on_mouse)
     os.makedirs("backend/screenshots", exist_ok=True)
+    os.makedirs("backend/videos", exist_ok=True)
 
     try:
         while True:
@@ -158,7 +184,7 @@ if __name__ == "__main__":
                 frames_copy={k:v.copy() for k,v in latest_frames.items()}
                 procs_copy=camera_procs.copy()
 
-            grid,cols,rows = build_grid(frames_copy)
+            grid,cols,rows=build_grid(frames_copy)
             if grid is None: time.sleep(0.05); continue
 
             grid_layout.update({"cols":cols,"rows":rows,"fw":480,"fh":360})
@@ -170,8 +196,8 @@ if __name__ == "__main__":
             display=np.vstack([title_bar,grid])
             display=draw_title_bar(display,avg_fps,procs_copy)
 
-            cv2.imshow(WINDOW_TITLE, display)
-            key = cv2.waitKey(1) & 0xFF
+            cv2.imshow(WINDOW_TITLE,display)
+            key=cv2.waitKey(1)&0xFF
 
             if   key==ord("q"): print("\n[INFO] Quit."); break
             elif key==ord("t"):
@@ -190,7 +216,7 @@ if __name__ == "__main__":
                 with lock: p=camera_procs.copy()
                 for proc in p.values(): proc.show_zones=not proc.show_zones
                 print(f"[INFO] Zones {'ON' if p and next(iter(p.values())).show_zones else 'OFF'}")
-            elif key==ord("f"):   # DAY 12: fire tint toggle
+            elif key==ord("f"):
                 with lock: p=camera_procs.copy()
                 for proc in p.values(): proc.show_fire_tint=not proc.show_fire_tint
                 print(f"[INFO] Fire tint {'ON' if p and next(iter(p.values())).show_fire_tint else 'OFF'}")
