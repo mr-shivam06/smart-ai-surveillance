@@ -399,10 +399,14 @@ When asked *"how does your system handle X"*:
 
 ---
 
-## 👨‍💻 Author
+## 👨‍💻 Authors
 
-**Shivam**  
-[GitHub: @mr-shivam06](https://github.com/mr-shivam06)
+This project was built together by:
+
+| | Name | GitHub |
+|---|---|---|
+| 🧑‍💻 | **Shivam** | [@mr-shivam06](https://github.com/mr-shivam06) |
+| 👩‍💻 | **Naman** | [@naman-shakti1](https://github.com/naman-shakti1) |
 
 ---
 
